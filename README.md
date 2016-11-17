@@ -85,7 +85,14 @@ A client can subscribe to the Bus by sending a message. There are two kinds of s
  - with a `live` subscription Events are sent on immediately, one by one.
  - with a `batch` subscription the archive Events are sent every 24 hrs.
 
-To subscribe send a POST to `/subscriptions`. The body of the post should be JSON. It should contain 
+To subscribe send a `POST` to `/subscriptions`. The body of the post should be JSON, and both types of subscription have the same format. It should contain the following fields:
+
+ - `id`, which can be used to refer to the subscription later
+ - `type`, one of `live` or `batch`
+ - `url`, the endpoint to `POST` to
+ - `headers`, a dictionary of headers that should be sent to the endpoint, if you want
+
+Example:
 
     {
       "id": "example",
@@ -104,17 +111,19 @@ To delete a subscription, send a DELETE to `/subscription/«id»`.
 
 The Event Bus sends data on to consumers immediately when they subscribe with a live subscription.
 
-After a subscription is set up the service will start sending Events as a POST to the endpoint at the supplied URL. All succesfully accepted Events are passed straight through from the input to subscribers, with the given HTTP headers added. The format of Events is exactly the same as that in which they were received. You can configure authentication with your own service by setting the appropriate headers. Alternatively you can do this with query parameters.
+After a subscription is set up the service will start sending Events as a `POST` to the endpoint at the supplied URL. All succesfully accepted Events are passed straight through from the input to subscribers, with the given HTTP headers added. The format of Events is exactly the same as that in which they were received, with the `timestamp` header added. You can configure authentication with your own service by setting the appropriate headers. Alternatively you can do this with query parameters.
 
 ### Batch subscription.
 
-The Event Bus creates a daily archive approximately every 24 hours. When the archive is ready a notification is sent to all batch subscribers as a POST to the endpoint at the supplied URL. The content of the notification is a URL where the data can be fetched:
+The Event Bus creates a daily archive approximately every 24 hours. When the archive is ready a notification is sent to all batch subscribers as a `POST` to the endpoint at the supplied URL. The content of the notification is a URL where the data can be fetched:
 
     {
       "url": "http://archive.eventdata.crossref.org/archive/2016-11-01/events.json"
     }
 
-The specified headers will be sent.
+The specified headers will be sent. 
+
+Note that whilst each event is around 1 Kilobyte, the daily archive can be 50 Megabytes.
 
 ## Durability
 
@@ -129,9 +138,9 @@ Events are forwarded as they arrive but there is no guarantee that they will be 
 
 ### Data durability
 
-A PUSHed Event is not acknowledged until it has been written to storage. If delivery fails, the agent should consider that it has not been accepted and try again. 
+A `POST`ed Event is not acknowledged until it has been written to storage. If delivery fails, the agent should consider that it has not been accepted and try again. 
 
-The system will not accept the same Event twice (with identity specified by the `id` field) which means an agent can safely re-try sending Events. 
+The system will not accept the same Event twice (with identity specified by the `id` field) which means an agent can re-try sending Events if they failed. 
 
 ### Self validation
 
@@ -153,13 +162,13 @@ All Events are subject to the Event schema. If an Event is sent that does not co
 
 ## API Endpoints
 
- - GET `/subscriptions` - list subscriptions owned by user
- - POST `/subscriptions` - create new subscription
- - DELETE `/subscriptions/«subscription-id»` - unsubscribe
- - PUT `/subscriptions/«subscription-id»` - alter subscription
- - GET `/archive/«YYYY-MM-DD».json` - retrieve archive of Events for given day
- - POST `/events/` - send a new Event
- - PUT `/events/«event-id»` - update an Event
+ - `GET` `/subscriptions` - list subscriptions owned by user
+ - `POST` `/subscriptions` - create new subscription
+ - `DELETE` `/subscriptions/«subscription-id»` - unsubscribe
+ - `PUT` `/subscriptions/«subscription-id»` - alter subscription
+ - `GET` `/archive/«YYYY-MM-DD».json` - retrieve archive of Events for given day
+ - `POST` `/events/` - send a new Event
+ - `PUT` `/events/«event-id»` - update an Event
 
 ## Running the service
 
@@ -181,7 +190,7 @@ A self-contained Docker image will be provided.
 
 ### Production Deployment
 
-The Event Data Bus should be deployed as part of the wider Event Data. It connects to the following services:
+The Event Data Bus should be deployed as part of the wider Event Data system. It connects to the following services:
 
  - Redis
  - AWS S3
@@ -208,6 +217,7 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `PORT`               | Port to listen on                   | 9990    | Yes         |
 | `STATUS_SERVICE`     | Public URL of the Status service    |         | No, ignored if not supplied |
 | `JWT_SECRETS`        | Comma-separated list of JTW Secrets | If `MOCK` then `TEST` | Yes |
+| `PRIMARY`            | Is this the primary instance? Used to ensure certain tasks are done by one member of the cluster | TRUE | Yes |
 
 
 ## License
