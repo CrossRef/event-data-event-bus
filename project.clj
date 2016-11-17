@@ -18,7 +18,7 @@
                  [robert/bruce "0.8.0"]
                  [yogthos/config "0.8"]
                  [compojure "1.5.1"]
-                 [crossref/heartbeat "0.1.2"]
+                 [crossref/heartbeat "0.1.2"]]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}

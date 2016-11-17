@@ -219,6 +219,19 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `JWT_SECRETS`        | Comma-separated list of JTW Secrets | If `MOCK` then `TEST` | Yes |
 | `PRIMARY`            | Is this the primary instance? Used to ensure certain tasks are done by one member of the cluster | TRUE | Yes |
 
+## Docker
+
+### Mock
+
+The Mock image is a self-contained testing target for development of agents.
+
+To build:
+
+    docker build -f Dockerfile.mock -t crossref/event-data-event-bus-mock .
+
+To run:
+
+    docker run -p 9990:9990  -a stdout -it crossref/event-data-event-bus-mock
 
 ## License
 

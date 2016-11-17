@@ -1,0 +1,28 @@
+# Event Data Event Bus Mock
+# A test target for development of agents
+
+FROM ubuntu
+MAINTAINER Joe Wass jwass@crossref.org
+
+RUN apt-get update
+RUN apt-get -y install openjdk-8-jdk-headless
+RUN apt-get -y install curl
+
+RUN groupadd -r deploy && useradd -r -g deploy deploy
+RUN mkdir /home/deploy
+RUN chown deploy /home/deploy
+
+RUN curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > /usr/bin/lein
+RUN chmod a+x /usr/bin/lein
+
+COPY project.clj /home/deploy/project.clj
+COPY src /home/deploy/src
+
+# Fetch deps when building image.
+USER deploy
+RUN cd /home/deploy && lein deps
+
+ENV MOCK TRUE
+ENV PORT 9990
+
+ENTRYPOINT cd /home/deploy && lein run
