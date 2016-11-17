@@ -56,7 +56,7 @@ The `source_id` of every Event must match the `src` field of the token. This mea
 
 ### Storage
 
-All permanent storage is done on AWS S3. The service relies on the S3 read-after-write consistency, which is now [available in all regions](http://docs.aws.amazon.com/AmazonS3/latest/dev/Introduction.html#ConsistencyModel). Discussion in 'Duratbility' section.
+All permanent storage is done on AWS S3. The service relies on the S3 read-after-write consistency, which is now [available in all regions](http://docs.aws.amazon.com/AmazonS3/latest/dev/Introduction.html#ConsistencyModel). Discussion in 'Durability' section.
 
 Subscription data is stored in Redis.
 
@@ -70,7 +70,7 @@ The Event Bus will ignore the `timestamp` field and supply itself. The field can
 
 The following response codes will be returned:
 
- - 201 - correctly formatted, unique Event recieved
+ - 201 - correctly formatted, unique Event received
  - 400 - does not conform to schema
  - 401 - JWT token not present or correct
  - 403 - claims in JWT token don't match sent or updated Event
@@ -135,7 +135,7 @@ The system will not accept the same Event twice (with identity specified by the 
 
 ### Self validation
 
-A consuming system may make a `live` and a `batch` subscription. It can store and use the `live` Events as they are sent. At approximately 24 hour intervals, when the `batch` data is sent the agent can verify that it recieved all of the Event IDs.
+A consuming system may make a `live` and a `batch` subscription. It can store and use the `live` Events as they are sent. At approximately 24 hour intervals, when the `batch` data is sent the agent can verify that it received all of the Event IDs.
 
 ### Edited Events
 
