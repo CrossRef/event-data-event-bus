@@ -24,5 +24,6 @@ RUN cd /home/deploy && lein deps
 
 ENV MOCK TRUE
 ENV PORT 9990
+ENV JWT_SECRETS "TEST,TEST2"
 
-ENTRYPOINT cd /home/deploy && lein run
+ENTRYPOINT cd /home/deploy && lein test && lein run

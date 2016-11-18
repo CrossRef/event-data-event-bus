@@ -221,6 +221,12 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 
 ## Docker
 
+### Development
+
+You can run the mock container and mount the source code directory as a volume. 
+
+    docker run -p 9990:9990 -v `pwd`:/home/deploy -a stdout -it crossref/event-data-event-bus-mock
+
 ### Mock
 
 The Mock image is a self-contained testing target for development of agents.
