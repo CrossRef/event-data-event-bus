@@ -51,7 +51,8 @@
 (defn wrap-cors [handler]
   (fn [request]
     (let [response (handler request)]
-      (assoc-in response [:headers "Access-Control-Allow-Origin"] "*"))))
+      (when response
+        (assoc-in response [:headers "Access-Control-Allow-Origin"] "*")))))
 
 (defn get-token
   "Retrieve a token from a request. Return nil if missing or malformed."
@@ -66,7 +67,7 @@
   (try
     (.verify verifier token)
     ; Can be IllegalStateException, JsonParseException, SignatureException.
-    (catch Exception e (prn "EX" verifier e))))
+    (catch Exception e nil)))
 
 (defn wrap-jwt [handler secrets-str]
   (let [secrets (clojure.string/split secrets-str #",")
