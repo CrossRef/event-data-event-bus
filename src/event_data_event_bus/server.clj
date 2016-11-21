@@ -40,7 +40,7 @@
   :allowed-methods [:get]
   :available-media-types ["application/json"]
   :authorized? (fn [ctx]
-                (:jwt-claims ctx))
+                (-> ctx :request :jwt-claims))
   :handle-ok {"status" "ok"})
 
 (defroutes app-routes
