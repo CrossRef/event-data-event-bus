@@ -13,6 +13,7 @@
                  [ring "1.5.0"]
                  [ring/ring-jetty-adapter "1.5.0"]
                  [ring/ring-servlet "1.5.0"]
+                 [ring/ring-mock "0.3.0"]
                  [org.eclipse.jetty/jetty-server "9.4.0.M0"]
                  [overtone/at-at "1.2.0"]
                  [robert/bruce "0.8.0"]

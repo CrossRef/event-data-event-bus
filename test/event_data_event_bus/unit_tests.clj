@@ -1,4 +1,5 @@
 (ns event-data-event-bus.unit-tests
+  "Unit tests for individual functions."
   (:require [clojure.test :refer :all]
             [event-data-event-bus.server :as server])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]))
