@@ -268,9 +268,11 @@ or
 
 ### Development
 
-You can run the mock container and mount the source code directory as a volume. 
+During development when changes are being made to the local repository you can run the mock container and mount the source code directory as a volume. 
 
-    docker run -p 9990:9990 -v `pwd`:/home/deploy/event-data-event-bus -a stdout -it crossref/event-data-event-bus-mock
+    ./run-mock-live.sh
+
+All the test scripts also reflect the current code don't require rebuilding the image.
 
 ### Mock
 
@@ -284,9 +286,7 @@ To run:
 
     ./run-mock.sh
 
-Note that the Mock image is built with a snapshot of the code, so must be rebuilt if the code changes. To run the mock based on current code:
-
-    ./run-mock-live.sh
+Note that the Mock image is built with a snapshot of the code, so must be rebuilt if the code changes. To run the mock based on current code, run `./run-mock-live.sh` as above.
 
 
 ## Manual Tests
