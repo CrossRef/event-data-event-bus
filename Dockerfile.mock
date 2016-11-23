@@ -15,8 +15,6 @@ RUN mkdir /home/deploy
 RUN curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > /usr/bin/lein
 RUN chmod a+x /usr/bin/lein
 
-#COPY project.clj /home/deploy/project.clj
-#COPY src /home/deploy/src
 COPY . /home/deploy/event-data-event-bus
 
 RUN chown -R deploy /home/deploy
