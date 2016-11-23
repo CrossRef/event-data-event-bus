@@ -1,0 +1,1 @@
+docker build -f Dockerfile.mock -t crossref/event-data-event-bus-mock .

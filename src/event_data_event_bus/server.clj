@@ -10,13 +10,17 @@
             [liberator.core :refer [defresource]]
             [liberator.representation :as representation]
             [clj-time.core :as clj-time]
-            [clojure.java.io :refer [reader]])
+            [clojure.java.io :refer [reader]]
+            [event-data-event-bus.storage.redis :as redis])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]
            [java.net URL MalformedURLException InetAddress])
   (:gen-class))
 
 (def event-data-homepage "http://eventdata.crossref.org/")
-(def up-since (atom nil))
+
+(def up-since (delay (clj-time/now)))
+
+(def redis (delay (redis/build)))
 
 (defresource home
   []
@@ -30,11 +34,16 @@
   :allowed-methods [:get]
   :available-media-types ["application/json"]
   :handle-ok (fn [context]
-              (let [report {:machine_name (.getHostName (InetAddress/getLocalHost))
-                            :version (System/getProperty "event-data-event-bus.version")
-                            :up-since (str @up-since)
-                            :status "OK"}]
-                report)))
+              (let [now (clj-time/now)]
+                ; Set a key in redis, then get it, to confirm connection.
+                ((:set @redis) "heartbeat-ok" (str now))
+                (let [report {:machine_name (.getHostName (InetAddress/getLocalHost))
+                              :version (System/getProperty "event-data-event-bus.version")
+                              :up-since (str @up-since)
+                              :redis-checked (str ((:get @redis) "heartbeat-ok"))
+                              :now (str now)
+                              :status "OK"}]
+                  report))))
 
 ;   "Convenience method for checking JWTs."
 
@@ -128,6 +137,5 @@
 
 (defn run-server []
   (let [port (Integer/parseInt (:port env))]
-    (reset! up-since (clj-time/now))
     (l/info "Start server on " port)
     (server/run-server @app {:port port})))

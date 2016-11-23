@@ -4,7 +4,7 @@
             [event-data-event-bus.server :as server])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]))
 
-(deftest get-token
+(deftest ^:unit get-token
   (testing "Get-token should retrieve the token from a request."
     (is (= "abcdefgh" (server/get-token
                         {:remote-addr "172.17.0.1",
@@ -49,7 +49,7 @@
 
 
 
-(deftest wrap-jwt
+(deftest ^:unit wrap-jwt
   (let [jwt-secret1 "TEST"
         jwt-secret2 "TEST2"
         middleware (server/wrap-jwt identity "TEST,TEST2")

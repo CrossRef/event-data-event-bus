@@ -211,6 +211,7 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `BATCH_BACKOFF`      | Seconds between delivery Batch      | 10      | Yes       |
 | `REDIS_HOST`         | Redis host                          |         | Yes       |
 | `REDIS_PORT`         | Redis port                          |         | Yes       |
+| `REDIS_DB`           | Redis DB number                     | 0       | No        |
 | `S3_KEY`             | AWS Key Id                          |         | Yes unless `MOCK` | 
 | `S3_SECRET`          | AWS Secret Key                      |         | Yes unless `MOCK` |
 | `PUBLIC_BASE`        | Public Base URL of this service     | http://localhost:9990 | Yes |
@@ -219,25 +220,56 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `JWT_SECRETS`        | Comma-separated list of JTW Secrets | If `MOCK` then `TEST` | Yes |
 | `PRIMARY`            | Is this the primary instance? Used to ensure certain tasks are done by one member of the cluster | TRUE | Yes |
 
+## Tests
+
+Tests are split into three sections. Unit tests test only self-contained functions. Component tests require Redis. Integration tests require a live S3 instance on an AWS account. All can be run in a Docker container, and a Redis server is included in the 'mock' Docker image for this purpose.
+
+### Unit tests
+
+Unit tests are for functions. They can be run in any context.
+
+    ./unit-tests.sh
+
+### Component tests
+
+These are generally at the API level and require Redis to be configured. They mock out S3 dependencies using Redis for convenience. Use the Mock image to use a bundled Redis instance:
+
+    ./component-tests.sh
+
+### Integration tests
+
+These run at the API level and test integration with S3, and therefore must be configured for S3.
+
+    ./integration-tests.sh
+
+### Everything
+
+    ./all-tests.sh
+
 ## Docker
 
 ### Development
 
 You can run the mock container and mount the source code directory as a volume. 
 
-    docker run -p 9990:9990 -v `pwd`:/home/deploy -a stdout -it crossref/event-data-event-bus-mock
+    docker run -p 9990:9990 -v `pwd`:/home/deploy/event-data-event-bus -a stdout -it crossref/event-data-event-bus-mock
 
 ### Mock
 
-The Mock image is a self-contained testing target for development of agents.
+The Mock image is a self-contained testing target for development of agents. 
 
-To build:
+To build image:
 
-    docker build -f Dockerfile.mock -t crossref/event-data-event-bus-mock .
+    ./build-mock.sh
 
 To run:
 
-    docker run -p 9990:9990  -a stdout -it crossref/event-data-event-bus-mock
+    ./run-mock.sh
+
+Note that the Mock image is built with a snapshot of the code, so must be rebuilt if the code changes. To run the mock based on current code:
+
+   ./run-mock-live.sh
+
 
 ## Manual Tests
 
@@ -250,6 +282,10 @@ Check token
 Send event
 
   curl --verbose --data "{\"total\":1,\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\",\"message_action\":\"create\",\"subj_id\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"subj\":{\"pid\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"title\":\"Se\\u00f1alizaci\\u00f3n paracrina\",\"issued\":\"2016-09-25T23:58:58.000Z\",\"URL\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"type\":\"entry-encyclopedia\"},\"source_id\":\"wikipedia\",\"relation_type_id\":\"references\",\"obj_id\":\"https:\\/\\/doi.org\\/10.1093\\/EMBOJ\\/20.15.4132\",\"occurred_at\":\"2016-09-25T23:58:58Z\"}"  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSJ9.HTjBIVQK1Wf4Je9lZA4V-JcL08vOqoHt-Oy0pw9-q6s" http://localhost:9990/events
+
+Start mock conatiner with bash
+
+  docker run --user=root --entrypoint=/bin/bash -p 9990:9990  -a stdout -it crossref/event-data-event-bus-mock
 
 ## License
 

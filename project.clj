@@ -21,9 +21,15 @@
                  [compojure "1.5.1"]
                  [crossref/heartbeat "0.1.2"]
                  [com.auth0/java-jwt "2.2.1"]
-                 [clj-time "0.12.2"]]
+                 [clj-time "0.12.2"]
+                 [redis.clients/jedis "2.8.0"]]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
+  :test-selectors {:default (constantly true)
+                   :unit :unit
+                   :component :component
+                   :integration :integration
+                   :all (constantly true)}
   :profiles {:uberjar {:aot :all}
              :prod {:resource-paths ["config/prod"]}
              :dev  {:resource-paths ["config/dev"]}})

@@ -7,23 +7,31 @@ MAINTAINER Joe Wass jwass@crossref.org
 RUN apt-get update
 RUN apt-get -y install openjdk-8-jdk-headless
 RUN apt-get -y install curl
+RUN apt-get -y install redis-server
 
 RUN groupadd -r deploy && useradd -r -g deploy deploy
 RUN mkdir /home/deploy
-RUN chown deploy /home/deploy
 
 RUN curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > /usr/bin/lein
 RUN chmod a+x /usr/bin/lein
 
-COPY project.clj /home/deploy/project.clj
-COPY src /home/deploy/src
+#COPY project.clj /home/deploy/project.clj
+#COPY src /home/deploy/src
+COPY . /home/deploy/event-data-event-bus
+
+RUN chown -R deploy /home/deploy
 
 # Fetch deps when building image.
+# It's not necessary to rebuild the image every time there are new dependencies, as missing ones will be fetched at run-time.
+# This just gives us a head-start.
 USER deploy
-RUN cd /home/deploy && lein deps
+RUN cd /home/deploy/event-data-event-bus && lein deps
 
 ENV MOCK TRUE
 ENV PORT 9990
 ENV JWT_SECRETS "TEST,TEST2"
+ENV REDIS_HOST 127.0.0.1
+ENV REDIS_PORT 6379
+ENV REDIS_DB 0
 
-ENTRYPOINT cd /home/deploy && lein test && lein run
+ENTRYPOINT /home/deploy/event-data-event-bus/docker/mock.sh

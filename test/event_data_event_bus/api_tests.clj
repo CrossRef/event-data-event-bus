@@ -1,7 +1,6 @@
-(ns event-data-event-bus.api-tests
-  "Component tests that work at the Ring level.
-   These run through all the middleware including JWT extraction.
-   Most tests are done in `component-tests`, the other side of the middleware."
+(ns event-data-event-bus.component-tests
+  "Component tests that work at the Ring level, including routing.
+   These run through all the middleware including JWT extraction."
   (:require [clojure.test :refer :all]
             [clojure.data.json :as json]
             [event-data-event-bus.server :as server]
