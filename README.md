@@ -182,11 +182,11 @@ This application may be load balanced without further configuration. Every insta
 
 ### Running a mock instance for integration tests
 
-The service runs as an Integration test target. For this, it stores all data in Redis and does not require access to S3. All data is also deleted up start-up.
+The service runs as an Integration test target. For this, it stores all data in Redis and does not require access to S3. All data is also deleted at start-up.
 
 To run the Event Bus in Mock mode provide the `MOCK=TRUE` environment variable.
 
-A self-contained Docker image will be provided.
+A self-contained Docker image is provided, see below.
 
 ### Production Deployment
 
