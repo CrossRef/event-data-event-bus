@@ -110,3 +110,15 @@
     (is
       (= nil (:jwt-claims wrapped-bad))
       "Invalid token ignored.")))))
+
+(deftest ^:unit timestamp-event
+  (testing "Events can be timestamped"
+    (let [original-event {:contents :do :not :matter}
+          [timestamped-event yyyy-mm-dd] (server/timestamp-event original-event)]
+
+      (is (not (:timestamp original-event)) "Pre: timestamp not in original event.")
+
+      (is (clojure.set/subset? (set original-event) (set timestamped-event)) "Original keys and values should be present.")
+      (is (:timestamp timestamped-event) "Timestamp added to event")
+      (is yyyy-mm-dd "YYYY-MM-DD returned")
+      (is (.startsWith (:timestamp timestamped-event) yyyy-mm-dd) "YYYY-MM-DD is consistent with timestamp"))))

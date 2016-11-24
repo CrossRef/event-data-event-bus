@@ -17,25 +17,6 @@
 
 (def source-id "1111111111")
 
-(def good-event {
-  "obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
-  "occurred_at" "2016-09-25T23:58:58Z"
-  "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-  "total" 1
-  "id" "d24e5449-7835-44f4-b7e6-289da4900cd0"
-  "subj" {
-    "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-    "title" "Señalización paracrina"
-    "issued" "2016-09-25T23:58:58.000Z"
-    "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-    "type" "entry-encyclopedia"
-  }
-  "message_action" "create"
-  "source_id" source-id
-  "relation_type_id" "references"})
-
-(def good-event-json (delay (json/write-str good-event)))
-
 (def matching-token
   "A token that is correct for the event being sent (i.e. correct `sub`)."
   (delay (.sign @signer {"sub" source-id})))
@@ -54,31 +35,77 @@
 
 (deftest ^:component should-accept-good-events
   (testing "Submitted events with correctly signed JWT that matches the `subj` of the `source_id` should be accepted."
-    (let [token (.sign @signer {"sub" source-id})
+    (let [event (json/write-str
+                  {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
+                    "occurred_at" "2016-09-25T23:58:58Z"
+                    "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                    "total" 1
+                    "id" "EVENT-ID-1"
+                    "subj" {
+                      "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "title" "Señalización paracrina"
+                      "issued" "2016-09-25T23:58:58.000Z"
+                      "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "type" "entry-encyclopedia"}
+                    "message_action" "create"
+                    "source_id" source-id
+                    "relation_type_id" "references"})
+        
+          token (.sign @signer {"sub" source-id})
           request (->
               (mock/request :post "/events")
               (mock/header "authorization" (str "Bearer " @matching-token))
-              (mock/body @good-event-json))
+              (mock/body event))
           response (@server/app request)]
       (is (= 201 (:status response)) "Should be created OK."))))
 
 (deftest ^:component should-reject-events-not-matching-token
   (testing "Submitted events with correctly signed JWT but non-matching `subj` of the `source_id` should be rejected."
-    (let [token (.sign @signer {"sub" "my-service"})
+    (let [event (json/write-str
+                  {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
+                    "occurred_at" "2016-09-25T23:58:58Z"
+                    "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                    "total" 1
+                    "id" "EVENT-ID-2"
+                    "subj" {
+                      "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "title" "Señalización paracrina"
+                      "issued" "2016-09-25T23:58:58.000Z"
+                      "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "type" "entry-encyclopedia"}
+                    "message_action" "create"
+                    "source_id" source-id
+                    "relation_type_id" "references"})
+          token (.sign @signer {"sub" "my-service"})
           request (->
               (mock/request :post "/events")
               (mock/header "authorization" (str "Bearer " @not-matching-token))
-              (mock/body @good-event-json))
+              (mock/body event))
           response (@server/app request)]
       (is (= 403 (:status response)) "Should be forbidden"))))
 
 (deftest ^:component should-reject-unsigned-events
   (testing "Submitted events with incorrect JWT should be accepted."
-    (let [token (.sign @signer {"sub" "my-service"})
+    (let [event (json/write-str
+                  {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
+                    "occurred_at" "2016-09-25T23:58:58Z"
+                    "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                    "total" 1
+                    "id" "EVENT-ID-3"
+                    "subj" {
+                      "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "title" "Señalización paracrina"
+                      "issued" "2016-09-25T23:58:58.000Z"
+                      "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "type" "entry-encyclopedia"}
+                    "message_action" "create"
+                    "source_id" source-id
+                    "relation_type_id" "references"})
+          token (.sign @signer {"sub" "my-service"})
           request (->
               (mock/request :post "/events")
               (mock/header "authorization" (str "Bearer " @not-matching-token))
-              (mock/body @good-event-json))
+              (mock/body event))
           response (@server/app request)]
       (is (= 403 (:status response)) "Should be forbidden"))))
 
@@ -96,9 +123,36 @@
       (is (= (get-in response [:status]) 200)))))
 
 
+
 (deftest ^:component should-reject-duplicate-events
-  ; TODO
-)
+  (let [event (json/write-str
+                {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
+                  "occurred_at" "2016-09-25T23:58:58Z"
+                  "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                  "total" 1
+                  "id" "EVENT-ID-4"
+                  "subj" {
+                    "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                    "title" "Señalización paracrina"
+                    "issued" "2016-09-25T23:58:58.000Z"
+                    "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                    "type" "entry-encyclopedia"}
+                  "message_action" "create"
+                  "source_id" source-id
+                  "relation_type_id" "references"})
+        token (.sign @signer {"sub" source-id})
+
+        ; Send the same thing twice.
+        first-response (@server/app (-> (mock/request :post "/events")
+                                       (mock/header "authorization" (str "Bearer " @matching-token))
+                                       (mock/body event)))
+
+        second-response (@server/app (-> (mock/request :post "/events")
+                                       (mock/header "authorization" (str "Bearer " @matching-token))
+                                       (mock/body event)))]
+
+      (is (= 201 (:status first-response)) "Should be created OK.")
+      (is (= 403 (:status second-response)) "Duplicate should be rejected.")))
 
 (deftest ^:component should-assign-timestamps
   ; TODO

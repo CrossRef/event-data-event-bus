@@ -219,6 +219,7 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `STATUS_SERVICE`     | Public URL of the Status service    |         | No, ignored if not supplied |
 | `JWT_SECRETS`        | Comma-separated list of JTW Secrets | If `MOCK` then `TEST` | Yes |
 | `PRIMARY`            | Is this the primary instance? Used to ensure certain tasks are done by one member of the cluster | TRUE | Yes |
+| `STORAGE`            | Where to put permanent storage, "redis" or "s3". "redis" is only for testing. | s3 | No |
 
 ## Tests
 

@@ -25,11 +25,4 @@ RUN chown -R deploy /home/deploy
 USER deploy
 RUN cd /home/deploy/event-data-event-bus && lein deps
 
-ENV MOCK TRUE
-ENV PORT 9990
-ENV JWT_SECRETS "TEST,TEST2"
-ENV REDIS_HOST 127.0.0.1
-ENV REDIS_PORT 6379
-ENV REDIS_DB 0
-
 ENTRYPOINT /home/deploy/event-data-event-bus/docker/mock.sh

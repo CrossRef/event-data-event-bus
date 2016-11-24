@@ -10,8 +10,11 @@
             [liberator.core :refer [defresource]]
             [liberator.representation :as representation]
             [clj-time.core :as clj-time]
+            [clj-time.format :as clj-time-format]
+            [clj-time.coerce :as clj-time-coerce]
             [clojure.java.io :refer [reader]]
             [event-data-event-bus.storage.redis :as redis]
+            [event-data-event-bus.storage.redis :as s3]
             [event-data-event-bus.storage.store :as store])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]
            [java.net URL MalformedURLException InetAddress])
@@ -19,9 +22,32 @@
 
 (def event-data-homepage "http://eventdata.crossref.org/")
 
-(def up-since (delay (clj-time/now)))
+(def quick-check-expiry
+  "How long in milliseconds before mutex for quick-check expires? Should cover any delay in S3 propagagion."
+  (*
+    1000 ; 1 seconds
+    60 ; 1 minute
+    60 ; 1 hour
+    24 ; 1 day
+))
 
-(def redis (delay (redis/build)))
+(def up-since
+  "Start the clock so we know approximately how long this instance has been running."
+  (delay (clj-time/now)))
+
+(def redis-store
+  "A redis connection for storing subscription and short-term information."
+  (delay (redis/build)))
+
+(def storage
+  "A event-data-event-bus.storage.store.Store for permanently storing things"
+  (delay
+    (condp = (:storage env)
+      ; Redis can be used for component testing ONLY.
+      "redis" (redis/build)
+      "s3" (s3/build)
+      ; Default is S3 for production and integration testing.
+      (s3/build))))
 
 (defresource home
   []
@@ -38,11 +64,11 @@
   :handle-ok (fn [context]
               (let [now (clj-time/now)]
                 ; Set a key in redis, then get it, to confirm connection.
-                (store/set-string @redis "heartbeat-ok" (str now))
+                (store/set-string @redis-store "heartbeat-ok" (str now))
                 (let [report {:machine_name (.getHostName (InetAddress/getLocalHost))
                               :version (System/getProperty "event-data-event-bus.version")
                               :up-since (str @up-since)
-                              :redis-checked (str (store/get-string @redis "heartbeat-ok"))
+                              :redis-checked (str (store/get-string @redis-store "heartbeat-ok"))
                               :now (str now)
                               :status "OK"}]
                   report))))
@@ -58,8 +84,22 @@
                 (-> ctx :request :jwt-claims :sub))
   :handle-ok {"status" "ok"})
 
-;   "Create Events."
+(def yyyy-mm-dd-format (clj-time-format/formatter "yyyy-MM-dd"))
 
+
+(defn timestamp-event
+  "Prepare an Event for ingestion. Add timestamp.
+   Return [event, 'YYYY-MM-DD']"
+  [event]
+  (let [now (clj-time/now)
+        iso8601 (str now)
+        yyyy-mm-dd (clj-time-format/unparse yyyy-mm-dd-format now)]
+    [(assoc event :timestamp iso8601) yyyy-mm-dd]))
+
+
+
+
+;   "Create Events."
 (defresource events
   []
   :allowed-methods [:post]
@@ -78,14 +118,47 @@
   :allowed? (fn
               [ctx]
               ; Allowed only if the `sub` of the claim matches the `source_id` of the event.
-              (= (-> ctx ::payload :source_id)
-                 (get-in ctx [:request :jwt-claims "sub"])))
+              (let [; Check that the source ID matches.
+                    source-id-ok (= (-> ctx ::payload :source_id)
+                                    (get-in ctx [:request :jwt-claims "sub"]))
+                    
+                    ; Get the event with timestamp.
+                    [event yyyy-mm-dd] (timestamp-event (::payload ctx))
+
+                    event-id (:id event)
+
+                    ; Store the event in two places: access by event id and by yyyy-mm-dd prefix
+                    event-storage-key (str "events/" event-id)
+                    event-date-storage-key (str "day/" yyyy-mm-dd "/" event-id)
+                    
+                    ; Do a quick check in Redis to see if the event already exists.
+                    ; The mutex expires after a bit, long enough to cover any delay in S3 propagation.
+                    quick-check-ok (redis/expiring-mutex!? @redis-store (str "exists" event-id) quick-check-expiry)
+
+                    ; Also check permanent storage for existence.
+                    storage-check-ok (nil? (store/get-string @storage event-storage-key))
+
+                    allowed? (and
+                              ; accept if the source matches
+                              source-id-ok
+
+                              ; and we haven't just already sent it
+                              quick-check-ok
+
+                              ; and we haven't sent it in the past
+                              storage-check-ok)]
+                  
+                  [allowed? {::event-id event-id
+                            ::event-storage-key event-storage-key
+                            ::event-date-storage-key event-date-storage-key
+                            ::event event}]))
 
   :post! (fn [ctx]
-    (let [req (:request ctx)]
-      ; TODO don't do anything yet.
-      ; (prn "POSTED" req)
-      )))
+    (let [json (json/write-str (::event ctx))]
+      ; TODO return url
+      ; Upload to both places.
+      (store/set-string @storage (::event-storage-key ctx) json)
+      (store/set-string @storage (::event-date-storage-key ctx) json))))
 
 (defroutes app-routes
   (GET "/" [] (home))
