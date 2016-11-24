@@ -11,7 +11,8 @@
             [liberator.representation :as representation]
             [clj-time.core :as clj-time]
             [clojure.java.io :refer [reader]]
-            [event-data-event-bus.storage.redis :as redis])
+            [event-data-event-bus.storage.redis :as redis]
+            [event-data-event-bus.storage.store :as store])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]
            [java.net URL MalformedURLException InetAddress])
   (:gen-class))
@@ -28,6 +29,7 @@
   :handle-ok (fn [ctx]
                 (representation/ring-response
                   (ring-response/redirect event-data-homepage))))
+
 ;  "Expose heartbeat."
 (defresource heartbeat
   []
@@ -36,11 +38,11 @@
   :handle-ok (fn [context]
               (let [now (clj-time/now)]
                 ; Set a key in redis, then get it, to confirm connection.
-                ((:set @redis) "heartbeat-ok" (str now))
+                (store/set-string @redis "heartbeat-ok" (str now))
                 (let [report {:machine_name (.getHostName (InetAddress/getLocalHost))
                               :version (System/getProperty "event-data-event-bus.version")
                               :up-since (str @up-since)
-                              :redis-checked (str ((:get @redis) "heartbeat-ok"))
+                              :redis-checked (str (store/get-string @redis "heartbeat-ok"))
                               :now (str now)
                               :status "OK"}]
                   report))))

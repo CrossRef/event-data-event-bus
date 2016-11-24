@@ -1,4 +1,4 @@
-(ns event-data-event-bus.component-tests
+(ns event-data-event-bus.api-tests
   "Component tests that work at the Ring level, including routing.
    These run through all the middleware including JWT extraction."
   (:require [clojure.test :refer :all]
@@ -88,6 +88,12 @@
                      (mock/request :get "/"))]
       (is (= (get-in response [:status]) 302))
       (is (= (get-in response [:headers "Location"]) "http://eventdata.crossref.org/")))))
+
+(deftest ^:component heartbeat-ok
+  (testing "Heartbeat should return OK. This includes connection to external services."
+    (let [response (@server/app
+                     (mock/request :get "/heartbeat"))]
+      (is (= (get-in response [:status]) 200)))))
 
 
 (deftest ^:component should-reject-duplicate-events

@@ -1,6 +1,9 @@
 (ns event-data-event-bus.storage.redis
-  "Storage interface for redis. Stores all keys with a prefix."
-  (:require [config.core :refer [env]])
+  "Storage interface for redis. Satisfies the event-data-event-bus.storage.storage.Store protocol.
+   Also provides other Redis-specific methods.
+   All keys are stored in Redis with the given prefix."
+  (:require [config.core :refer [env]]
+            [event-data-event-bus.storage.store :refer [Store]])
   (:import [redis.clients.jedis Jedis JedisPool JedisPoolConfig]))
 
 (def prefix
@@ -30,25 +33,24 @@
     (.select resource (Integer/parseInt (get env :redis-db default-db-str)))
     resource))
 
-; Below are factory functions.
+(defn get-string
+  [pool k]
+  (with-open [conn (get-connection pool)]
+    (.get conn (str prefix k))))
 
-(defn get-value
-  [pool]
-  "Factory function to return 'get value for key' function."
-  (fn [k]
-    (with-open [conn (get-connection pool)]
-      (.get conn (str prefix k)))))
+(defn set-string
+  [pool k v]
+  (with-open [conn (get-connection pool)]
+    (.set conn (str prefix k) v)))
 
-(defn set-value
+(defrecord Redis
   [pool]
-  "Factory function to return 'set value for key' function."
-  (fn [k v]
-    (with-open [conn (get-connection pool)]
-      (.set conn (str prefix k) v))))
+  Store
+  (get-string [this k] (get-string pool k))
+  (set-string [this k v] (set-string pool k v)))
 
 (defn build
-  "Build an interface dict"
+  "Build a Store object."
   []
   (let [pool (make-jedis-pool)]
-    {:get (get-value pool)
-     :set (set-value pool)}))
+    (Redis. pool)))
