@@ -128,8 +128,9 @@
                     event-id (:id event)
 
                     ; Store the event in two places: access by event id and by yyyy-mm-dd prefix
-                    event-storage-key (str "events/" event-id)
-                    event-date-storage-key (str "day/" yyyy-mm-dd "/" event-id)
+                    ; Prefixes as short as possible to help with S3 load balancing.
+                    event-storage-key (str "e/" event-id)
+                    event-date-storage-key (str "d/" yyyy-mm-dd "/" event-id)
                     
                     ; Do a quick check in Redis to see if the event already exists.
                     ; The mutex expires after a bit, long enough to cover any delay in S3 propagation.
@@ -154,15 +155,29 @@
                             ::event event}]))
 
   :post! (fn [ctx]
+    ; Don't return the URL of the new event on the API (although it should be available),
+    ; because the Event Bus API doesn't guarantee read-after-write.
+    ; We still check the `event/«id»` endpoint for component testing though.
     (let [json (json/write-str (::event ctx))]
-      ; TODO return url
       ; Upload to both places.
       (store/set-string @storage (::event-storage-key ctx) json)
       (store/set-string @storage (::event-date-storage-key ctx) json))))
 
+(defresource event
+  [id]
+  :allowed-methods [:get]
+  :available-media-types ["application/json"]
+  :exists? (fn [ctx]
+    (let [event (store/get-string @storage (str "e/" id))
+          event-exists? (not (nil? event))]
+      [event-exists? {::event event}]))
+  :handle-ok (fn [ctx]
+    (::event ctx)))
+
 (defroutes app-routes
   (GET "/" [] (home))
   (POST "/events" [] (events))
+  (GET "/events/:id" [id] (event id))
   (GET "/heartbeat" [] (heartbeat))
   (GET "/auth-test" [] (auth-test)))
 
