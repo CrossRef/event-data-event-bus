@@ -1,0 +1,1 @@
+docker run --entrypoint=bash -p 9990:9990  -a stdout -v `pwd`:/home/deploy/event-data-event-bus -it crossref/event-data-event-bus-mock

@@ -304,7 +304,7 @@ Send event
 
 Start mock containre with bash
 
-    docker run --user=root --entrypoint=/bin/bash -p 9990:9990  -a stdout -it crossref/event-data-event-bus-mock
+    docker run --user=deploy --entrypoint=/bin/bash -p 9990:9990  -a stdout -it crossref/event-data-event-bus-mock
 
 ## License
 

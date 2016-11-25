@@ -22,7 +22,8 @@
                  [crossref/heartbeat "0.1.2"]
                  [com.auth0/java-jwt "2.2.1"]
                  [clj-time "0.12.2"]
-                 [redis.clients/jedis "2.8.0"]]
+                 [redis.clients/jedis "2.8.0"]
+                 [metosin/scjsv "0.4.0"]]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
   :test-selectors {:default (constantly true)

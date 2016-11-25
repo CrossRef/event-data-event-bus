@@ -15,7 +15,8 @@
             [clojure.java.io :refer [reader]]
             [event-data-event-bus.storage.redis :as redis]
             [event-data-event-bus.storage.redis :as s3]
-            [event-data-event-bus.storage.store :as store])
+            [event-data-event-bus.storage.store :as store]
+            [event-data-event-bus.schema :as schema])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]
            [java.net URL MalformedURLException InetAddress])
   (:gen-class))
@@ -110,10 +111,9 @@
                 (-> ctx :request :jwt-claims))
 
   :malformed? (fn [ctx]
-                ; Further schema checks will take place here.
-                (try
-                  [false {::payload (json/read (-> ctx :request :body reader) :key-fn keyword)}]
-                  (catch Exception e (do true))))
+                (let [payload (try (-> ctx :request :body reader (json/read :key-fn keyword)) (catch Exception _ nil))
+                      schema-errors (schema/validation-errors payload)]
+                  [schema-errors {::payload payload ::schema-errors schema-errors}]))
 
   :allowed? (fn
               [ctx]
@@ -153,6 +153,12 @@
                             ::event-storage-key event-storage-key
                             ::event-date-storage-key event-date-storage-key
                             ::event event}]))
+
+  :handle-malformed (fn [ctx]
+                      (json/write-str (if-let [schema-errors (::schema-errors ctx)]
+                        {:status "Malformed"
+                         :schema-errors schema-errors}
+                        {:status "Malformed"})))
 
   :post! (fn [ctx]
     ; Don't return the URL of the new event on the API (although it should be available),
