@@ -98,8 +98,6 @@
     [(assoc event :timestamp iso8601) yyyy-mm-dd]))
 
 
-
-
 ;   "Create Events."
 (defresource events
   []

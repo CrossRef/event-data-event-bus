@@ -1,11 +1,12 @@
-(ns event-data-event-bus.api-tests
-  "Component tests that work at the Ring level, including routing.
+(ns event-data-event-bus.server-tests
+  "Tests for the server namespace.
+   Most component tests work at the Ring level, including routing.
    These run through all the middleware including JWT extraction."
   (:require [clojure.test :refer :all]
             [clojure.data.json :as json]
             [event-data-event-bus.server :as server]
             [ring.mock.request :as mock])
-  (:import [com.auth0.jwt JWTSigner]))
+  (:import [com.auth0.jwt JWTSigner JWTVerifier]))
 
 (def signer
   "A JWT signer that uses a secret we expect."
@@ -32,6 +33,127 @@
 (def invalid-token
   "A token from another universe."
   (delay "PLEASE_LET_ME_IN"))
+
+; Authentication
+
+(deftest ^:unit get-token
+  (testing "Get-token should retrieve the token from a request."
+    (is (= "abcdefgh" (server/get-token
+                        {:remote-addr "172.17.0.1",
+                         :headers {
+                           "accept" "*/*",
+                           "authorization" "Bearer abcdefgh",
+                           "host" "localhost:9990",
+                           "user-agent" "curl/7.49.1"},
+                         :uri "/heartbeat",
+                         :server-name "localhost",
+                         :body nil,
+                         :scheme :http,
+                         :request-method :get}))))
+
+  (testing "Get-token should return nil if not present."
+    (is (= nil (server/get-token
+                {:remote-addr "172.17.0.1",
+                 :headers {
+                   "accept" "*/*",
+                   "authorization" "",
+                   "host" "localhost:9990",
+                   "user-agent" "curl/7.49.1"},
+                 :uri "/heartbeat",
+                 :server-name "localhost",
+                 :body nil,
+                 :scheme :http,
+               :request-method :get}))))
+
+    (testing "Get-token should return nil if malformed."
+      (is (= nil (server/get-token 
+                  {:remote-addr "172.17.0.1",
+                   :headers {
+                     "accept" "*/*",
+                     "authorization" "Token abcdefgh",
+                     "host" "localhost:9990",
+                     "user-agent" "curl/7.49.1"},
+                   :uri "/heartbeat",
+                   :server-name "localhost",
+                   :body nil,
+                   :scheme :http,
+                   :request-method :get})))))
+
+(deftest ^:unit wrap-jwt
+  (let [jwt-secret1 "TEST"
+        jwt-secret2 "TEST2"
+        middleware (server/wrap-jwt identity "TEST,TEST2")
+        signer1 (new JWTSigner jwt-secret1)
+        signer2 (new JWTSigner jwt-secret2)
+        token-content {"test-key" "test-value"}
+        token1 (.sign signer1 token-content)
+        token2 (.sign signer2 token-content)]
+
+  (testing "wrap-jwt should decode more than one token"
+    (let [wrapped1 (middleware
+                      {:remote-addr "172.17.0.1"
+                       :headers {
+                         "accept" "*/*"
+                         "authorization" (str "Bearer " token1)
+                         "host" "localhost:9990"
+                         "user-agent" "curl/7.49.1"}
+                       :uri "/heartbeat"
+                       :server-name "localhost"
+                       :body nil
+                       :scheme :http
+                       :request-method :get})
+
+          wrapped2 (middleware
+                      {:remote-addr "172.17.0.1"
+                       :headers {
+                         "accept" "*/*"
+                         "authorization" (str "Bearer " token2)
+                         "host" "localhost:9990"
+                         "user-agent" "curl/7.49.1"}
+                       :uri "/heartbeat"
+                       :server-name "localhost"
+                       :body nil
+                       :scheme :http
+                       :request-method :get})
+
+          wrapped-bad (middleware
+                      {:remote-addr "172.17.0.1"
+                       :headers {
+                         "accept" "*/*"
+                         "authorization" (str "Bearer BAD TOKEN")
+                         "host" "localhost:9990"
+                         "user-agent" "curl/7.49.1"}
+                       :uri "/heartbeat"
+                       :server-name "localhost"
+                       :body nil
+                       :scheme :http
+                       :request-method :get})]
+
+    (is
+      (= token-content (:jwt-claims wrapped1))
+      "Token can be decoded using one of the secrets, associated to request.")
+
+    (is
+      (= token-content (:jwt-claims wrapped2))
+      "Token can be decoded using the other of the secrets, associated to request.")
+
+    (is
+      (= nil (:jwt-claims wrapped-bad))
+      "Invalid token ignored.")))))
+
+; Ingestion, validation, authorization
+
+(deftest ^:unit timestamp-event
+  (testing "Events can be timestamped"
+    (let [original-event {:contents :do :not :matter}
+          [timestamped-event yyyy-mm-dd] (server/timestamp-event original-event)]
+
+      (is (not (:timestamp original-event)) "Pre: timestamp not in original event.")
+
+      (is (clojure.set/subset? (set original-event) (set timestamped-event)) "Original keys and values should be present.")
+      (is (:timestamp timestamped-event) "Timestamp added to event")
+      (is yyyy-mm-dd "YYYY-MM-DD returned")
+      (is (.startsWith (:timestamp timestamped-event) yyyy-mm-dd) "YYYY-MM-DD is consistent with timestamp"))))
 
 (deftest ^:component should-accept-good-events
   (testing "Submitted events with correctly signed JWT that matches the `subj` of the `source_id` should be accepted."
@@ -141,20 +263,6 @@
       (is (= 400 (:status response)) "Should be malformed")
       (is (.contains (-> :body response) "schema-errors") "Should say something about schema errors"))))
 
-(deftest ^:component home-redirects
-  (testing "URL base redirects to Event Data site."
-    (let [response (@server/app
-                     (mock/request :get "/"))]
-      (is (= (get-in response [:status]) 302))
-      (is (= (get-in response [:headers "Location"]) "http://eventdata.crossref.org/")))))
-
-(deftest ^:component heartbeat-ok
-  (testing "Heartbeat should return OK. This includes connection to external services."
-    (let [response (@server/app
-                     (mock/request :get "/heartbeat"))]
-      (is (= (get-in response [:status]) 200)))))
-
-
 
 (deftest ^:component should-reject-duplicate-events
   (let [event (json/write-str
@@ -189,3 +297,19 @@
 (deftest ^:component should-assign-timestamps
   ; TODO
 )
+
+; Other bits and pieces.
+
+(deftest ^:component home-redirects
+  (testing "URL base redirects to Event Data site."
+    (let [response (@server/app
+                     (mock/request :get "/"))]
+      (is (= (get-in response [:status]) 302))
+      (is (= (get-in response [:headers "Location"]) "http://eventdata.crossref.org/")))))
+
+(deftest ^:component heartbeat-ok
+  (testing "Heartbeat should return OK. This includes connection to external services."
+    (let [response (@server/app
+                     (mock/request :get "/heartbeat"))]
+      (is (= (get-in response [:status]) 200)))))
+

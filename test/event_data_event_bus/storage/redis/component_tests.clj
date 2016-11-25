@@ -1,8 +1,17 @@
 (ns event-data-event-bus.storage.redis.component-tests
-  "Component tests for Redis."
+  "Component tests for the storage.redis namespace."
   (:require [clojure.test :refer :all]
             [event-data-event-bus.storage.redis :as redis]
             [event-data-event-bus.storage.store :as store]))
+
+(deftest ^:unit add-remove-prefix
+  (testing "Prefix can be added and removed"
+    (let [original "one two three"
+          prefixed (redis/add-prefix original)
+          unprefixed (redis/remove-prefix prefixed)]
+      (is (not= original prefixed) "Prefix is added")
+      (is (not= prefixed unprefixed) "Prefix is removed")
+      (is (= original unprefixed) "Correct prefix is removed"))))
 
 (deftest ^:component set-and-get
   (testing "Key can be set and retrieved."
