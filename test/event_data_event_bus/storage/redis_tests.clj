@@ -1,4 +1,4 @@
-(ns event-data-event-bus.storage.redis.component-tests
+(ns event-data-event-bus.storage.redis-tests
   "Component tests for the storage.redis namespace."
   (:require [clojure.test :refer :all]
             [event-data-event-bus.storage.redis :as redis]
