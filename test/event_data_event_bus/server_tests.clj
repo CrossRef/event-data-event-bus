@@ -5,7 +5,10 @@
   (:require [clojure.test :refer :all]
             [clojure.data.json :as json]
             [event-data-event-bus.server :as server]
-            [ring.mock.request :as mock])
+            [ring.mock.request :as mock]
+            [clj-time.core :as clj-time]
+            [clj-time.format :as clj-time-format]
+            [clojure.java.io :as io])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]))
 
 (def signer
@@ -157,7 +160,7 @@
 
 (deftest ^:component should-accept-good-events
   (testing "Submitted events with correctly signed JWT that matches the `subj` of the `source_id` should be accepted."
-    (let [event   {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
+    (let [event  {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
                   "occurred_at" "2016-09-25T23:58:58Z"
                   "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
                   "total" 1
@@ -297,6 +300,99 @@
 (deftest ^:component should-assign-timestamps
   ; TODO
 )
+
+(deftest ^:component should-reject-bad-dates
+  ; Pick a day to be 'today'.
+  (let [today-midnight (clj-time/date-time 2016 2 5)
+        tomorrow-midnight (clj-time/plus today-midnight (clj-time/days 1))
+        yesterday-midnight (clj-time/minus today-midnight (clj-time/days 1))]
+
+    (testing "Archive should reject badly formatted dates"
+      (is (= 400 (:status (@server/app (-> (mock/request :get "/events/live-archive/fifth-of-september-twenty-sixteen")
+                                (mock/header "authorization" (str "Bearer " @matching-token))))))
+          "Badly formatted date should be rejected as malformed."))
+
+    (testing "Archive should reject dates after today"
+      (clj-time/do-at today-midnight
+        (let [tomorrow-str (clj-time-format/unparse server/yyyy-mm-dd-format tomorrow-midnight)]
+          (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" tomorrow-str))
+                                    (mock/header "authorization" (str "Bearer " @matching-token))))))
+              "Tomorrow's date should be forbidden."))))
+
+    (testing "Archive should reject requests for dates that end precisely at midnight this morning unless we're at least an hour later."
+      (let [yesterday-str (clj-time-format/unparse server/yyyy-mm-dd-format yesterday-midnight)
+            ; two hours after midnight this morning
+            two-hours-later (clj-time/plus today-midnight (clj-time/hours 2))]
+        
+        (clj-time/do-at today-midnight
+          (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" yesterday-str))
+                                               (mock/header "authorization" (str "Bearer " @matching-token))))))
+              "Yesterday's date should be forbidden for the first hour of the day."))
+
+        (clj-time/do-at two-hours-later
+          (is (= 200 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" yesterday-str))
+                                               (mock/header "authorization" (str "Bearer " @matching-token))))))
+              "Yesterday's date should be OK after the first hour of the day."))))))
+
+(deftest ^:component should-archive-events
+  (let [friday (clj-time/date-time 2016 11 25)
+        saturday (clj-time/date-time 2016 11 26)
+        sunday (clj-time/date-time 2016 11 27)
+        monday (clj-time/date-time 2016 11 28)
+
+        token (.sign @signer {"sub" "wikipedia"})
+
+        ; just north of 3,000 events, a day's worth of Wikipedia.
+        friday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-25.json"))))
+        saturday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-26.json"))))
+        sunday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-27.json"))))]
+
+    (testing "Pre-verification, event IDs from different days are all different."
+      (let [friday-ids (set (map #(get %"id") friday-events))
+            saturday-ids (set (map #(get %"id") saturday-events))
+            sunday-ids (set (map #(get %"id") sunday-events))]
+
+        (is (empty? (clojure.set/intersection friday-ids saturday-ids)))
+        (is (empty? (clojure.set/intersection saturday-ids sunday-ids)))
+        (is (empty? (clojure.set/intersection friday-ids sunday-ids))))
+
+    ; A busy weekend of events.
+    (clj-time/do-at friday
+      (doseq [event friday-events]
+        (@server/app (->
+          (mock/request :post "/events")
+          (mock/header "authorization" (str "Bearer " token))
+          (mock/body (json/write-str event))))))
+
+    (clj-time/do-at saturday
+      (doseq [event saturday-events]
+        (@server/app (->
+          (mock/request :post "/events")
+          (mock/header "authorization" (str "Bearer " token))
+          (mock/body (json/write-str event))))))
+
+    (clj-time/do-at sunday
+      (doseq [event sunday-events]
+        (@server/app (->
+          (mock/request :post "/events")
+          (mock/header "authorization" (str "Bearer " token))
+          (mock/body (json/write-str event))))))
+
+    (testing "Events for specific day can be retrieved as an archive."
+      (clj-time/do-at monday
+        (let [retrieved-archive (@server/app (-> (mock/request :get (str "/events/live-archive/2016-11-26"))
+                                                 (mock/header "authorization" (str "Bearer " @matching-token))))
+              retrieved-events (json/read-str (:body retrieved-archive))]
+
+          (is (= (count saturday-events)
+                 (count retrieved-events)) "Correct number of events should have been returned for the day.")
+
+          (is (not-any? #(get % "timestamp") saturday-events) "Input events had no timestamps.")
+          (is (every? #(get % "timestamp") retrieved-events) "All events should have been given IDs.")
+
+          (is (= (set (map #(get %"id") saturday-events))
+                 (set (map #(get %"id") retrieved-events))) "All event IDs sent on Saturday should be returned.")))))))
+
 
 ; Other bits and pieces.
 

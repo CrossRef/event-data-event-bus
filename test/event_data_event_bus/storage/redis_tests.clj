@@ -75,5 +75,4 @@
         (is (= (count keys-matching) num-keys) "The right number of keys should be returned.")
 
         ; Every key we get should start with the right prefix.
-        (doseq [k keys-matching]
-          (is (.startsWith k "included-")))))))
+        (is (every? true? (map #(.startsWith % "included-") keys-matching)))))))

@@ -90,11 +90,7 @@
       ; Set a token value. SETNX returns true if it wasn't set before.
       (let [success (= 1 (.setnx conn (add-prefix k) "."))]
         (.pexpire conn (add-prefix k) milliseconds)
-        success)))
-
-  
-
-  )
+        success))))
 
 (defn build
   "Build a RedisConnection object."

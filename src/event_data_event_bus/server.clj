@@ -16,7 +16,8 @@
             [event-data-event-bus.storage.redis :as redis]
             [event-data-event-bus.storage.redis :as s3]
             [event-data-event-bus.storage.store :as store]
-            [event-data-event-bus.schema :as schema])
+            [event-data-event-bus.schema :as schema]
+            [event-data-event-bus.archive :as archive])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]
            [java.net URL MalformedURLException InetAddress])
   (:gen-class))
@@ -127,8 +128,8 @@
 
                     ; Store the event in two places: access by event id and by yyyy-mm-dd prefix
                     ; Prefixes as short as possible to help with S3 load balancing.
-                    event-storage-key (str "e/" event-id)
-                    event-date-storage-key (str "d/" yyyy-mm-dd "/" event-id)
+                    event-storage-key (str archive/event-prefix event-id)
+                    event-date-storage-key (str archive/day-prefix yyyy-mm-dd "/" event-id)
                     
                     ; Do a quick check in Redis to see if the event already exists.
                     ; The mutex expires after a bit, long enough to cover any delay in S3 propagation.
@@ -171,16 +172,48 @@
   [id]
   :allowed-methods [:get]
   :available-media-types ["application/json"]
+
   :exists? (fn [ctx]
-    (let [event (store/get-string @storage (str "e/" id))
+    (let [event (store/get-string @storage (str archive/event-prefix id))
           event-exists? (not (nil? event))]
       [event-exists? {::event event}]))
   :handle-ok (fn [ctx]
     (::event ctx)))
 
+; A live-generated archive. Not for routine use.
+(defresource events-live-archive
+  [date-str]
+  :available-media-types ["application/json"]
+  :authorized? (fn
+              [ctx]
+              ; Authorized if the JWT claims are correctly signed.
+              (-> ctx :request :jwt-claims))
+
+  :malformed? (fn [ctx]
+    (let [date (try (clj-time-format/parse yyyy-mm-dd-format date-str) (catch IllegalArgumentException _ nil))]
+      [(nil? date) {::date date}]))
+  :allowed? (fn [ctx]
+              ; The date argument specifies the start of the day for which we want events.
+              ; Only allowed if the requested date range is yesterday or before.
+              (let [; Find the end of the day queried.
+                    end-date (clj-time/plus (::date ctx) (clj-time/days 1))
+
+                    ; The latest it can be is midnight at the start of today (i.e. end of yesterday).
+                    ; Add an extra hour to allow storage to propagate.
+                    ; midnight (clj-time/today-at-midnight)
+                    ; minimum (clj-time/date-time (clj-time/year midnight) (clj-time/month midnight) (clj-time/day midnight) 1 0 0)
+                    latest (clj-time/minus (clj-time/now) (clj-time/hours 1))
+
+                    allowed (clj-time/before? end-date latest)]
+                allowed))
+  :handle-ok (fn [ctx]
+                (archive/archive-for @storage date-str)))
+
 (defroutes app-routes
   (GET "/" [] (home))
   (POST "/events" [] (events))
+  (GET "/events/live-archive/:date" [date] (events-live-archive date))
+  ; TODO pre-calculated archive
   (GET "/events/:id" [id] (event id))
   (GET "/heartbeat" [] (heartbeat))
   (GET "/auth-test" [] (auth-test)))

@@ -1,0 +1,24 @@
+(ns event-data-event-bus.archive
+  (:require [clojure.data.json :as json]
+            [clojure.tools.logging :as l])
+  (:require [event-data-event-bus.storage.store :as store]
+            [event-data-event-bus.storage.store :refer [Store]]))
+
+(def day-prefix
+  "Prefix under which events are stored with their date, e.g. 'd/2016-11-27/86accb20-1c8f-483d-8567-52ad031ba190'"
+  "d/")
+
+(def event-prefix
+  "Prefix under which events are stored for retrieval, e.g. 'e/f0ca191e-b8af-485c-b06b-fbee4cf0423b'"
+  "e/")
+
+(defn archive-for
+  "Generate archive for given YYYY-MM-DD date string prefix."
+  [storage date-str]
+  (let [; All events we're looking for will have been stored with the `day-prefix` and the YYYY-MM-DD prefix.
+        all-keys (store/keys-matching-prefix storage (str day-prefix date-str))
+        ; Retrieve every event for every key.
+        all-event-blobs (map (partial store/get-string storage) all-keys)
+        all-events (map json/read-str all-event-blobs)]
+    (l/info "Archive for" date-str "got" (count all-keys))
+    all-events))
