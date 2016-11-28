@@ -1,7 +1,7 @@
 (ns event-data-event-bus.core
+  (:require [event-data-event-bus.server :refer [run-server]])
   (:gen-class))
 
 (defn -main
-  "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (run-server))

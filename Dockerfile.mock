@@ -1,0 +1,28 @@
+# Event Data Event Bus Mock
+# A test target for development of agents
+
+FROM ubuntu
+MAINTAINER Joe Wass jwass@crossref.org
+
+RUN apt-get update
+RUN apt-get -y install openjdk-8-jdk-headless
+RUN apt-get -y install curl
+RUN apt-get -y install redis-server
+
+RUN groupadd -r deploy && useradd -r -g deploy deploy
+RUN mkdir /home/deploy
+
+RUN curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > /usr/bin/lein
+RUN chmod a+x /usr/bin/lein
+
+COPY . /home/deploy/event-data-event-bus
+
+RUN chown -R deploy /home/deploy
+
+# Fetch deps when building image.
+# It's not necessary to rebuild the image every time there are new dependencies, as missing ones will be fetched at run-time.
+# This just gives us a head-start.
+USER deploy
+RUN cd /home/deploy/event-data-event-bus && lein deps
+
+ENTRYPOINT /home/deploy/event-data-event-bus/docker/mock.sh

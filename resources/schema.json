@@ -1,0 +1,99 @@
+{
+  "type":"object",
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "id": "http://eventdata.crossref.org/schemas/event/v0.0.1/schema.json",
+  "required": [
+    "id",
+    "obj_id",
+    "occurred_at",
+    "relation_type_id",
+    "source_id",
+    "subj_id"
+  ],
+  "properties":{
+    "id": {
+      "type":"string",
+      "id": "http://eventdata.crossref.org/schemas/id"
+    },
+    "message_action": {
+      "type":"string",
+      "id": "http://eventdata.crossref.org/schemas/message_action"
+    },
+    "obj_id": {
+      "type":"string",
+      "id": "http://eventdata.crossref.org/schemas/obj_id",
+    },
+    "occurred_at": {
+      "type":"string",
+      "id": "http://eventdata.crossref.org/schemas/occurred_at",
+    },
+    "relation_type_id": {
+      "type":"string",
+      "id": "http://eventdata.crossref.org/schemas/relation_type_id"
+    },
+    "source_id": {
+      "type":"string",
+      "id": "http://eventdata.crossref.org/schemas/source_id"
+    },
+    "subj_id": {
+      "type":"string",
+      "id": "http://eventdata.crossref.org/schemas/subj_id"
+    },
+    "subj": {
+      "type":"object",
+      "id": "http://eventdata.crossref.org/schemas/subj",
+      "properties":{
+        "URL": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/URL"
+        },
+        "issued": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/issued"
+        },
+        "pid": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/pid"
+        },
+        "title": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/title"
+        },
+        "type": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/type"
+        }
+      }
+    },
+    "obj": {
+      "type":"object",
+      "id": "http://eventdata.crossref.org/schemas/obj",
+      "properties":{
+        "URL": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/URL"
+        },
+        "issued": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/issued"
+        },
+        "pid": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/pid"
+        },
+        "title": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/title"
+        },
+        "type": {
+          "type":"string",
+          "id": "http://eventdata.crossref.org/schemas/type"
+        }
+      }
+    },
+    "total": {
+      "type":"number",
+      "id": "http://eventdata.crossref.org/schemas/total"
+    }
+  }
+}
