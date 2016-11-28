@@ -57,3 +57,23 @@
 
     (is (true? (redis/expiring-mutex!? redis-conn k 1000)) "Access to mutex should be true after expiry.")))
 
+(deftest ^:component keys-matching-prefix
+  (testing "All keys matching prefix should be returned."
+    ; Insert 10,000 keys that we do want to match and 10,000 that we don't.
+    (let [conn (redis/build)
+          num-keys 10000
+          included-keys (map #(str "included-" %) (range num-keys))
+          not-included-keys (map #(str "not-included-" %) (range num-keys))]
+      
+      (doseq [k included-keys]
+        (store/set-string conn k "some data"))
+      
+      (doseq [k not-included-keys]
+        (store/set-string conn k "some data"))
+      
+      (let [keys-matching (store/keys-matching-prefix conn "included-")]
+        (is (= (count keys-matching) num-keys) "The right number of keys should be returned.")
+
+        ; Every key we get should start with the right prefix.
+        (doseq [k keys-matching]
+          (is (.startsWith k "included-")))))))

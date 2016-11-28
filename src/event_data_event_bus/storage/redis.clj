@@ -4,21 +4,36 @@
    All keys are stored in Redis with the given prefix."
   (:require [config.core :refer [env]]
             [event-data-event-bus.storage.store :refer [Store]])
-  (:import [redis.clients.jedis Jedis JedisPool JedisPoolConfig]))
+  (:import [redis.clients.jedis Jedis JedisPool JedisPoolConfig ScanResult ScanParams]))
 
 (def prefix
   "Unique prefix applied to every key."
   "event-data-bus:")
 
+(def prefix-length (count prefix))
+
 (def default-db-str "0")
 
 (defn remove-prefix
   [^String k]
-  (when k (.substring k 15)))
+  (when k (.substring k prefix-length)))
 
 (defn add-prefix
   [^String k]
   (str prefix k))
+
+(defn scan-match-cursor
+  "Lazy sequence of scan results matching pattern.
+   Return [result-set, cursor]"
+  [connection pattern cursor]
+  (let [scan-params (.match (new ScanParams) pattern)
+        result (.scan connection cursor scan-params)
+        items (.getResult result)
+        next-cursor (.getCursor result)]
+    ; Zero signals end of iteration.
+    (if (zero? next-cursor)
+      items
+      (lazy-cat items (scan-match-cursor connection pattern next-cursor)))))
 
 (defn make-jedis-pool
   []
@@ -39,6 +54,8 @@
 
   (expiring-mutex!? [this k milliseconds] "Check and set expiring mutex atomically, returning true if didn't exist."))
 
+; An object that implements a Store (see `event-data-event-bus.storage.store` namespace).
+; Not all methods are recommended for use in production, some are for component tests.
 (defrecord RedisConnection
   [^JedisPool pool]
   
@@ -51,6 +68,18 @@
     (with-open [ conn (get-connection pool)]
     (.set conn (add-prefix k) v)))
 
+  (keys-matching-prefix [this prefix]
+    ; Because we add a prefix to everything in Redis, we need to add that first.
+    (with-open [ conn (get-connection pool)]
+      (let [match (str (add-prefix prefix) "*")
+            found-keys (scan-match-cursor conn match 0)
+            ; remove prefix added here, not the one being searched for.
+            all-keys (map remove-prefix found-keys)
+
+            ; Redis may return the same key twice: https://redis.io/commands/scan
+            all-unique-keys (set all-keys)]
+          all-unique-keys)))
+
   Redis
   (set-string-and-expiry [this k milliseconds v]
     (with-open [conn (get-connection pool)]
@@ -61,7 +90,11 @@
       ; Set a token value. SETNX returns true if it wasn't set before.
       (let [success (= 1 (.setnx conn (add-prefix k) "."))]
         (.pexpire conn (add-prefix k) milliseconds)
-        success))))
+        success)))
+
+  
+
+  )
 
 (defn build
   "Build a RedisConnection object."
