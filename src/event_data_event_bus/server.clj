@@ -98,7 +98,6 @@
         yyyy-mm-dd (clj-time-format/unparse yyyy-mm-dd-format now)]
     [(assoc event :timestamp iso8601) yyyy-mm-dd]))
 
-
 ;   "Create Events."
 (defresource events
   []
@@ -164,9 +163,10 @@
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
     (let [json (json/write-str (::event ctx))]
-      ; Upload to both places.
+      ; Store the event by its ID.
       (store/set-string @storage (::event-storage-key ctx) json)
-      (store/set-string @storage (::event-date-storage-key ctx) json))))
+      ; Also store the key for the per-day index. We only use the presence of the key. 
+      (store/set-string @storage (::event-date-storage-key ctx) ""))))
 
 (defresource event
   [id]
@@ -184,10 +184,9 @@
 (defresource events-live-archive
   [date-str]
   :available-media-types ["application/json"]
-  :authorized? (fn
-              [ctx]
-              ; Authorized if the JWT claims are correctly signed.
-              (-> ctx :request :jwt-claims))
+  :authorized? (fn [ctx]
+                ; Authorized if the JWT claims are correctly signed.
+                (-> ctx :request :jwt-claims))
 
   :malformed? (fn [ctx]
     (let [date (try (clj-time-format/parse yyyy-mm-dd-format date-str) (catch IllegalArgumentException _ nil))]
@@ -209,11 +208,11 @@
   :handle-ok (fn [ctx]
                 (archive/archive-for @storage date-str)))
 
+
 (defroutes app-routes
   (GET "/" [] (home))
   (POST "/events" [] (events))
   (GET "/events/live-archive/:date" [date] (events-live-archive date))
-  ; TODO pre-calculated archive
   (GET "/events/:id" [id] (event id))
   (GET "/heartbeat" [] (heartbeat))
   (GET "/auth-test" [] (auth-test)))

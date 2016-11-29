@@ -301,25 +301,25 @@
   ; TODO
 )
 
-(deftest ^:component should-reject-bad-dates
+(deftest ^:component live-archive-should-reject-bad-dates
   ; Pick a day to be 'today'.
   (let [today-midnight (clj-time/date-time 2016 2 5)
         tomorrow-midnight (clj-time/plus today-midnight (clj-time/days 1))
         yesterday-midnight (clj-time/minus today-midnight (clj-time/days 1))]
 
-    (testing "Archive should reject badly formatted dates"
+    (testing "Live Archive should reject badly formatted dates"
       (is (= 400 (:status (@server/app (-> (mock/request :get "/events/live-archive/fifth-of-september-twenty-sixteen")
                                 (mock/header "authorization" (str "Bearer " @matching-token))))))
           "Badly formatted date should be rejected as malformed."))
 
-    (testing "Archive should reject dates after today"
+    (testing "Live Archive should reject dates after today"
       (clj-time/do-at today-midnight
         (let [tomorrow-str (clj-time-format/unparse server/yyyy-mm-dd-format tomorrow-midnight)]
           (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" tomorrow-str))
                                     (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Tomorrow's date should be forbidden."))))
 
-    (testing "Archive should reject requests for dates that end precisely at midnight this morning unless we're at least an hour later."
+    (testing "Live Archive should reject requests for dates that end precisely at midnight this morning unless we're at least an hour later."
       (let [yesterday-str (clj-time-format/unparse server/yyyy-mm-dd-format yesterday-midnight)
             ; two hours after midnight this morning
             two-hours-later (clj-time/plus today-midnight (clj-time/hours 2))]
@@ -333,6 +333,9 @@
           (is (= 200 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" yesterday-str))
                                                (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Yesterday's date should be OK after the first hour of the day."))))))
+
+
+; Generation and consumption of archive.
 
 (deftest ^:component should-archive-events
   (let [friday (clj-time/date-time 2016 11 25)
