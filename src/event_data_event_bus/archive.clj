@@ -30,9 +30,12 @@
 
         ; Retrieve every event for every key.
         event-blobs (map (partial store/get-string storage) event-keys)
-        all-events (map json/read-str event-blobs)]
+        all-events (map json/read-str event-blobs)
+
+        timestamp (str (clj-time/now))]
     (l/info "Archive for" date-str "got" (count event-keys))
-    all-events)) 
+    {"archive-generated" timestamp
+     "events" all-events}))
 
 (defn save-archive
   "Save or update archive in storage."
