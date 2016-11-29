@@ -387,6 +387,9 @@
           (is (= (count saturday-events)
                  (count retrieved-events)) "Correct number of events should have been returned for the day.")
 
+          (is (every? #(.startsWith (get % "timestamp") "2016-11-26") retrieved-events)
+            "All events in a day's archive should have the timestamp of that day.")
+
           (is (not-any? #(get % "timestamp") saturday-events) "Input events had no timestamps.")
           (is (every? #(get % "timestamp") retrieved-events) "All events should have been given IDs.")
 
