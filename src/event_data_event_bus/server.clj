@@ -208,11 +208,26 @@
   :handle-ok (fn [ctx]
                 (archive/archive-for @storage date-str)))
 
+; Serve up the pre-generated archive. 
+(defresource events-archive
+  [date-str]
+  :available-media-types ["application/json"]
+  :exists? (fn [ctx]
+            ; TODO can be streamed?
+            (let [storage-key (str archive/archive-prefix date-str)
+                  content (store/get-string @storage storage-key)
+                  exists (some? content)]
+              [exists {::content content}]))
+  :handle-ok (fn [ctx]
+              ; Pass the data straight through.
+              (representation/ring-response
+                {:body (::content ctx)})))
 
 (defroutes app-routes
   (GET "/" [] (home))
   (POST "/events" [] (events))
   (GET "/events/live-archive/:date" [date] (events-live-archive date))
+  (GET "/events/archive/:date" [date] (events-archive date))
   (GET "/events/:id" [id] (event id))
   (GET "/heartbeat" [] (heartbeat))
   (GET "/auth-test" [] (auth-test)))

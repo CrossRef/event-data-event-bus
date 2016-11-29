@@ -13,6 +13,10 @@
   "Prefix under which events are stored for retrieval, e.g. 'e/f0ca191e-b8af-485c-b06b-fbee4cf0423b'"
   "e/")
 
+(def archive-prefix
+  "Prefix under which per-day archives are stored."
+  "a/")
+
 (defn archive-for
   "Generate archive for given YYYY-MM-DD date string prefix."
   [storage date-str]
@@ -29,3 +33,9 @@
         all-events (map json/read-str event-blobs)]
     (l/info "Archive for" date-str "got" (count event-keys))
     all-events)) 
+
+(defn save-archive
+  "Save or update archive in storage."
+  [storage date-str]
+  (let [archive (archive-for storage date-str)]
+    (store/set-string storage (str archive-prefix date-str) (json/write-str archive))))
