@@ -1,0 +1,9 @@
+export S3_KEY=""
+export S3_SECRET=""
+export S3_BUCKET_NAME=""
+export S3_REGION_NAME=""
+
+# Empty bucket first.
+aws s3 rm  s3://$S3_BUCKET_NAME/ --region $S3_REGION_NAME --recursive
+
+time  ./integration-tests.sh

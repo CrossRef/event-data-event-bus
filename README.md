@@ -214,6 +214,8 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `REDIS_DB`           | Redis DB number                     | 0       | No        |
 | `S3_KEY`             | AWS Key Id                          |         | Yes unless `MOCK` | 
 | `S3_SECRET`          | AWS Secret Key                      |         | Yes unless `MOCK` |
+| `S3_BUCKET_NAME`     | AWS S3 bucket name                  |         | Yes unless `MOCK` |
+| `S3_REGION_NAME`     | AWS S3 bucket region name           |         | Yes unless `MOCK` |
 | `PUBLIC_BASE`        | Public Base URL of this service     | http://localhost:9990 | Yes |
 | `PORT`               | Port to listen on                   | 9990    | Yes         |
 | `STATUS_SERVICE`     | Public URL of the Status service    |         | No, ignored if not supplied |
@@ -249,14 +251,14 @@ Or without Docker (but you'll have to configure Redis)
 
 ### Integration tests
 
-These run at the API level and test integration with S3, and therefore must be configured for S3.
+These run at the API level and test integration with S3, and therefore must be configured for S3. The actual test suite executed is component tests, except configured to run against S3. 
 
-    ./integration-tests.sh
+Because of the consistency semantics of S3, running the tests twice in quick succession may not work (but probably will). They should work in isolation. An **empty** bucket should be provided. Running integration tests ships a lot of data over the network, approximatley a few days worth at December 2016 volumes (several tens of thousands of events). As of December 2016 the tests take about 5 minutes to run.
+
+    S3_BUCKET_NAME="..." S3_REGION_NAME="..." S3_KEY="..." S3_SECRET="..." ./integration-tests.sh
+
+The `local-integration-test.sh.template` file gives an example local file.
     
-Or without Docker:
-
-    lein test :integration
-
 ### Everything
 
     ./all-tests.sh
@@ -290,7 +292,7 @@ To run:
 Note that the Mock image is built with a snapshot of the code, so must be rebuilt if the code changes. To run the mock based on current code, run `./run-mock-live.sh` as above.
 
 
-## Manual Tests
+## Manual tinkering
 
 Can be run against a Mock instance to check everything's OK.
 

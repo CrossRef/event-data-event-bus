@@ -29,7 +29,9 @@
         event-keys (map #(str event-prefix (.substring ^String % prefix-length)) date-keys)
 
         ; Retrieve every event for every key.
-        event-blobs (map (partial store/get-string storage) event-keys)
+        ; S3 performs well in parallel, so fetch items in parallel.
+        future-event-blobs (map #(future (store/get-string storage %)) event-keys)
+        event-blobs (map deref future-event-blobs)
         all-events (map json/read-str event-blobs)
 
         timestamp (str (clj-time/now))]

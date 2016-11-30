@@ -25,4 +25,6 @@ RUN chown -R deploy /home/deploy
 USER deploy
 RUN cd /home/deploy/event-data-event-bus && lein deps
 
+# Don't run lein compile because we'll probably be loading the code and it'll change.
+
 ENTRYPOINT /home/deploy/event-data-event-bus/docker/mock.sh

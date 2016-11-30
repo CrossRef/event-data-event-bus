@@ -14,7 +14,7 @@
             [clj-time.coerce :as clj-time-coerce]
             [clojure.java.io :refer [reader]]
             [event-data-event-bus.storage.redis :as redis]
-            [event-data-event-bus.storage.redis :as s3]
+            [event-data-event-bus.storage.s3 :as s3]
             [event-data-event-bus.storage.store :as store]
             [event-data-event-bus.schema :as schema]
             [event-data-event-bus.archive :as archive])

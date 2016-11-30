@@ -4,6 +4,7 @@
    These run through all the middleware including JWT extraction."
   (:require [clojure.test :refer :all]
             [clojure.data.json :as json]
+            [clojure.tools.logging :as l]
             [event-data-event-bus.server :as server]
             [event-data-event-bus.archive :as archive]
             [ring.mock.request :as mock]
@@ -335,6 +336,12 @@
                                                (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Yesterday's date should be OK after the first hour of the day."))))))
 
+(defn parallel-doseq
+  "Apply f to every element of coll as quickly as possible in as many threads as possible."
+  [coll f]
+  (let [futures (map #(future (f %)) coll)]
+    (doseq [futur futures]
+      (deref futur))))
 
 ; Generation and consumption of live archive and archive.
 
@@ -361,26 +368,29 @@
         (is (empty? (clojure.set/intersection friday-ids sunday-ids)))))
 
     ; A busy weekend of events.
+  (l/info "Insert Friday")
     (clj-time/do-at friday
-      (doseq [event friday-events]
-        (@server/app (->
-          (mock/request :post "/events")
-          (mock/header "authorization" (str "Bearer " token))
-          (mock/body (json/write-str event))))))
+      (parallel-doseq friday-events (fn [event]
+                                      (@server/app (->
+                                        (mock/request :post "/events")
+                                        (mock/header "authorization" (str "Bearer " token))
+                                        (mock/body (json/write-str event)))))))
 
+    (l/info "Insert Saturday")
     (clj-time/do-at saturday
-      (doseq [event saturday-events]
-        (@server/app (->
-          (mock/request :post "/events")
-          (mock/header "authorization" (str "Bearer " token))
-          (mock/body (json/write-str event))))))
+      (parallel-doseq saturday-events (fn [event]
+                                        (@server/app (->
+                                          (mock/request :post "/events")
+                                          (mock/header "authorization" (str "Bearer " token))
+                                          (mock/body (json/write-str event)))))))
 
+    (l/info "Insert Sunday")
     (clj-time/do-at sunday
-      (doseq [event sunday-events]
-        (@server/app (->
-          (mock/request :post "/events")
-          (mock/header "authorization" (str "Bearer " token))
-          (mock/body (json/write-str event))))))
+      (parallel-doseq sunday-events (fn [event]
+                                      (@server/app (->
+                                        (mock/request :post "/events")
+                                        (mock/header "authorization" (str "Bearer " token))
+                                        (mock/body (json/write-str event)))))))
 
     (testing "Events for specific day can be retrieved as live archive."
       (clj-time/do-at monday
@@ -423,13 +433,14 @@
     (let [token (.sign @signer {"sub" "wikipedia"})
           friday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-25.json"))))]
         ; Insert some events
-    
+
       (clj-time/do-at (clj-time/date-time 2016 11 25)
-        (doseq [event friday-events]
-          (@server/app (->
-            (mock/request :post "/events")
-            (mock/header "authorization" (str "Bearer " token))
-            (mock/body (json/write-str event))))))
+        (parallel-doseq friday-events (fn [event]
+                                        (@server/app (->
+                                          (mock/request :post "/events")
+                                          (mock/header "authorization" (str "Bearer " token))
+                                          (mock/body (json/write-str event)))))))
+
 
       ; Next day. They should not be available in the archive yet.
       (clj-time/do-at (clj-time/date-time 2016 1 27)
