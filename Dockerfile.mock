@@ -1,5 +1,5 @@
 # Event Data Event Bus Mock
-# A test target for development of agents
+# A test target for development of agents and running tests.
 
 FROM ubuntu
 MAINTAINER Joe Wass jwass@crossref.org
