@@ -11,6 +11,8 @@
            [org.apache.commons.io IOUtils]
            [java.io InputStream]))
 
+; Default retry policy of 3 to cope with failure.
+; http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/ClientConfiguration.html#DEFAULT_RETRY_POLICY
 (defn get-aws-client
   []
   (let [client (new AmazonS3Client (new BasicAWSCredentials (:s3-key env) (:s3-secret env)))]
