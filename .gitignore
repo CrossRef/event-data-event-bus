@@ -12,6 +12,6 @@ pom.xml.asc
 config
 .DS_Store
 .m2
-
+*.rdb
 # Contains keys.
 local-integration-tests.sh

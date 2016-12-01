@@ -148,7 +148,23 @@ A consuming system may make a `live` and a `batch` subscription. It can store an
 
 ### Edited Events
 
-Events will be edited very infrequently. One of the principles of Event Data is the immutability of an Event. However, in exceptional circumstances where we are compelled to, some data must be edited. It is not possible to delete an Event, but it is possible to edit and over-write some data. 
+Events will be edited very infrequently. One of the principles of Event Data is the immutability of an Event. However, in exceptional circumstances where we are compelled to, some data must be edited. It is not possible to delete an Event, but it is possible to edit and over-write some data.
+
+When a `DELETE` is sent for an existing Event, the following fields are set on the Event:
+
+ - `updated` - datestamp event was deleted
+ - `update_action` - set to `"deleted"`
+
+The following fields are removed:
+
+ - `subj` - any subj metadata
+ - `obj` - any obj metadata
+
+The following field is set:
+
+ - `subj_id` - this is set to `http://eventdata.crossref.org/removed`
+
+This effectively marks the Event as having been deleted. It also retains enough information about the object, source and timestamp of the Event that consumers who have already used the event are not left in an inconsistent state.
 
 ### S3 Concerns
 
@@ -168,7 +184,7 @@ All Events are subject to the Event schema. If an Event is sent that does not co
  - `PUT` `/subscriptions/«subscription-id»` - alter subscription
  - `GET` `/archive/«YYYY-MM-DD».json` - retrieve archive of Events for given day
  - `POST` `/events/` - send a new Event
- - `PUT` `/events/«event-id»` - update an Event
+ - `DELETE` `/events/«event-id»` - update an Event to mark as deleted
 
 ## Running the service
 
@@ -204,7 +220,6 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 
 | Environment variable | Description                         | Default | Required? |
 |----------------------|-------------------------------------|---------|-----------|
-| `MOCK`               | Run in mock mode for agent testing  | FALSE   | Yes       |
 | `LIVE_RETRIES`       | Number of tries to deliver Live     | 10      | Yes       |
 | `LIVE_BACKOFF`       | Seconds between delivery Live       | 10      | Yes       |
 | `LIVE_RETRIES`       | Number of tries to deliver Batch    | 10      | Yes       |
@@ -212,15 +227,15 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `REDIS_HOST`         | Redis host                          |         | Yes       |
 | `REDIS_PORT`         | Redis port                          |         | Yes       |
 | `REDIS_DB`           | Redis DB number                     | 0       | No        |
-| `S3_KEY`             | AWS Key Id                          |         | Yes unless `MOCK` | 
-| `S3_SECRET`          | AWS Secret Key                      |         | Yes unless `MOCK` |
-| `S3_BUCKET_NAME`     | AWS S3 bucket name                  |         | Yes unless `MOCK` |
-| `S3_REGION_NAME`     | AWS S3 bucket region name           |         | Yes unless `MOCK` |
+| `S3_KEY`             | AWS Key Id                          |         | If storage = "s3" | 
+| `S3_SECRET`          | AWS Secret Key                      |         | If storage = "s3" |
+| `S3_BUCKET_NAME`     | AWS S3 bucket name                  |         | If storage = "s3" |
+| `S3_REGION_NAME`     | AWS S3 bucket region name           |         | If storage = "s3" |
 | `PUBLIC_BASE`        | Public Base URL of this service     | http://localhost:9990 | Yes |
 | `PORT`               | Port to listen on                   | 9990    | Yes         |
 | `STATUS_SERVICE`     | Public URL of the Status service    |         | No, ignored if not supplied |
-| `JWT_SECRETS`        | Comma-separated list of JTW Secrets | If `MOCK` then `TEST` | Yes |
-| `PRIMARY`            | Is this the primary instance? Used to ensure certain tasks are done by one member of the cluster | TRUE | Yes |
+| `JWT_SECRETS`        | Comma-separated list of JTW Secrets |         | Yes |
+| `TASK_WORKER`        | Is this the background task worker? | TRUE    | Yes |
 | `STORAGE`            | Where to put permanent storage, "redis" or "s3". "redis" is only for testing. | s3 | No |
 
 ## Tests

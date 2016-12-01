@@ -9,7 +9,6 @@ echo "daemonize yes" | redis-server -
 
 cd /home/deploy/event-data-event-bus
 
-export MOCK="FALSE"
 export PORT="9990"
 export JWT_SECRETS="TEST,TEST2"
 export REDIS_HOST="127.0.0.1"
