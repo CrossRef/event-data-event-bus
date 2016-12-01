@@ -7,7 +7,6 @@ echo "Running UNIT tests"
 
 # (Redis doesn't apply here!)
 
-export MOCK="TRUE"
 export PORT="9990"
 export JWT_SECRETS="TEST,TEST2"
 export REDIS_HOST="127.0.0.1"
