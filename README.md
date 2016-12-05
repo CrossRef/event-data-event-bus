@@ -231,7 +231,6 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 | `S3_SECRET`          | AWS Secret Key                      |         | If storage = "s3" |
 | `S3_BUCKET_NAME`     | AWS S3 bucket name                  |         | If storage = "s3" |
 | `S3_REGION_NAME`     | AWS S3 bucket region name           |         | If storage = "s3" |
-| `PUBLIC_BASE`        | Public Base URL of this service     | http://localhost:9990 | Yes |
 | `PORT`               | Port to listen on                   | 9990    | Yes         |
 | `STATUS_SERVICE`     | Public URL of the Status service    |         | No, ignored if not supplied |
 | `JWT_SECRETS`        | Comma-separated list of JTW Secrets |         | Yes |
