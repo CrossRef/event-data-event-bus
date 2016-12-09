@@ -2,8 +2,8 @@
   (:require [clojure.data.json :as json]
             [clojure.tools.logging :as l]
             [clj-time.core :as clj-time])
-  (:require [event-data-event-bus.storage.store :as store]
-            [event-data-event-bus.storage.store :refer [Store]]))
+  (:require [event-data-common.storage.store :as store]
+            [event-data-common.storage.store :refer [Store]]))
 
 (def day-prefix
   "Prefix under which events are stored with their date, e.g. 'd/2016-11-27/86accb20-1c8f-483d-8567-52ad031ba190'"

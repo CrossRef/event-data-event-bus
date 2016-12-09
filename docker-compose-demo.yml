@@ -1,0 +1,25 @@
+version: '2'
+services:
+  demo:
+    depends_on:
+     - redis
+    build: .
+    ports:
+     - '9002:9002'
+    volumes:
+     - .:/code
+     - ./.m2-cache:/home/deploy/.m2
+    environment:
+     - PORT=9002
+     - REDIS_HOST=redis
+     - REDIS_PORT=6379
+     - REDIS_DB=0
+     - JWT_SECRETS=TEST,TEST2
+     - STORAGE=s3
+     - S3_KEY=${S3_KEY}
+     - S3_SECRET=${S3_SECRET}
+     - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+     - S3_REGION_NAME=${S3_REGION_NAME}
+
+  redis:
+    image: redis

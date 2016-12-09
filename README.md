@@ -216,7 +216,7 @@ The Event Data Bus should be deployed as part of the wider Event Data system. It
 
 All configuration variables are required. Some have defaults.
 
-When you run the Mock Docker image all values are supplied but you can over-ride them.
+Note that during development and testing Docker Compose refers to the `.env` file for some of these.
 
 | Environment variable | Description                         | Default | Required? |
 |----------------------|-------------------------------------|---------|-----------|
@@ -239,86 +239,74 @@ When you run the Mock Docker image all values are supplied but you can over-ride
 
 ## Tests
 
-Tests are split into three sections. Unit tests test only self-contained functions. Component tests require Redis. Integration tests require a live S3 instance on an AWS account. All can be run in a Docker container, and a Redis server is included in the 'mock' Docker image for this purpose.
+Tests are split into three sections:
+ - Unit tests test only self-contained functions.
+ - Component tests require Redis. Most tests live here.
+ - Integration tests require a live S3 instance on an AWS account.
 
-Most tests are component tests.
+Three Docker Compose files are provided, including various levels of configuration and a Redis container. 
+
+Note that integration and component tests must be run separately because they have different top-level configurations (specifically the value of the `STORAGE`);
 
 ### Unit tests
 
 Unit tests are for functions. They can be run in any context.
 
-    ./unit-tests.sh
-    
-Or without Docker:
-
-    lein test :unit
+ - `time docker-compose -f docker-compose-unit-tests.yml run -w /code test lein test :unit`
 
 ### Component tests
 
 These are generally at the API level and require Redis to be configured. They mock out S3 dependencies using Redis for convenience. Use the Mock image to use a bundled Redis instance:
 
-    ./component-tests.sh
-    
-Or without Docker (but you'll have to configure Redis)
-
-    lein test :component
+ - `time docker-compose -f docker-compose-component-tests.yml run -w /code test lein test :component`
 
 ### Integration tests
 
-These run at the API level and test integration with S3, and therefore must be configured for S3. The actual test suite executed is component tests, except configured to run against S3. 
+**Note: there are currently no integration tests.** Previously extant integration tests have been refactored into the Event Data Common library.
 
-Because of the consistency semantics of S3, running the tests twice in quick succession may not work (but probably will). They should work in isolation. An **empty** bucket should be provided. Running integration tests ships a lot of data over the network, approximatley a few days worth at December 2016 volumes (several tens of thousands of events). As of December 2016 the tests take about 5 minutes to run.
+These run at the API level and test integration with S3, and therefore must be configured for S3. The actual test suite executed is component tests, except configured to run against S3. You must include a .env file with the following keys:
 
-    S3_BUCKET_NAME="..." S3_REGION_NAME="..." S3_KEY="..." S3_SECRET="..." ./integration-tests.sh
+ - `S3_KEY`
+ - `S3_SECRET`
+ - `S3_BUCKET_NAME`
+ - `S3_REGION_NAME`
 
-The `local-integration-test.sh.template` file gives an example local file.
-    
-### Everything
+Then
 
-    ./all-tests.sh
-    
-or
+ - `time docker-compose -f docker-compose-integration-tests.yml run -w /code test lein test :integration`
 
-    lein test
+If the bucket is not empty, tests will still pass, but it may take a long time to clear the bucket. The AWS command-line tools provide a quick parallel way to empty a bucket **but exercise caution**:
+
+ - `source .env && aws s3 rm --region $S3_REGION_NAME --recursive s3://$S3_BUCKET_NAME`
 
 ## Docker
 
-### Development
+### Production
+
+This should be run with Docker Swarm for load-balancing, service discovery and fail-over. Details can be found in the Event Data System repository.
+
+ - command: `lein run`
+ - directory: `/code`
+
+### Running a demo instance for development
 
 During development when changes are being made to the local repository you can run the mock container and mount the source code directory as a volume. 
 
-    ./run-mock-live.sh
+    docker-compose -f docker-compose-demo.yml run -w /code demo lein run
 
-All the test scripts also reflect the current code don't require rebuilding the image.
+To rebuild
 
-### Mock
-
-The Mock image is a self-contained testing target for development of agents. 
-
-To build image:
-
-    ./build-mock.sh
-
-To run:
-
-    ./run-mock.sh
-
-Note that the Mock image is built with a snapshot of the code, so must be rebuilt if the code changes. To run the mock based on current code, run `./run-mock-live.sh` as above.
-
-
-## Manual tinkering
-
-Can be run against a Mock instance to check everything's OK.
+    docker-compose -f docker-compose-demo.yml build demo
 
 Check token 
 
-    curl --verbose  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSJ9.HTjBIVQK1Wf4Je9lZA4V-JcL08vOqoHt-Oy0pw9-q6s" http://localhost:9990/auth-test
+    curl --verbose  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSJ9.HTjBIVQK1Wf4Je9lZA4V-JcL08vOqoHt-Oy0pw9-q6s" http://localhost:9002/auth-test
 
 Send event
 
-    curl --verbose --data "{\"total\":1,\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\",\"message_action\":\"create\",\"subj_id\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"subj\":{\"pid\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"title\":\"Se\\u00f1alizaci\\u00f3n paracrina\",\"issued\":\"2016-09-25T23:58:58.000Z\",\"URL\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"type\":\"entry-encyclopedia\"},\"source_id\":\"wikipedia\",\"relation_type_id\":\"references\",\"obj_id\":\"https:\\/\\/doi.org\\/10.1093\\/EMBOJ\\/20.15.4132\",\"occurred_at\":\"2016-09-25T23:58:58Z\"}"  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSJ9.HTjBIVQK1Wf4Je9lZA4V-JcL08vOqoHt-Oy0pw9-q6s" http://localhost:9990/events
+    curl --verbose --header "Content-Type: application/json" --data "{\"total\":1,\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\",\"message_action\":\"create\",\"subj_id\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"subj\":{\"pid\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"title\":\"Se\\u00f1alizaci\\u00f3n paracrina\",\"issued\":\"2016-09-25T23:58:58.000Z\",\"URL\":\"https:\\/\\/es.wikipedia.org\\/wiki\\/Se%C3%B1alizaci%C3%B3n_paracrina\",\"type\":\"entry-encyclopedia\"},\"source_id\":\"wikipedia\",\"relation_type_id\":\"references\",\"obj_id\":\"https:\\/\\/doi.org\\/10.1093\\/EMBOJ\\/20.15.4132\",\"occurred_at\":\"2016-09-25T23:58:58Z\"}"  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSIsInN1YiI6Indpa2lwZWRpYSJ9.w7zV2vtKNzrNDfgr9dfRpv6XYnspILRli_V5vd1J29Q" http://localhost:9002/events
 
-Start mock containre with bash
+Start mock container with bash:
 
     docker run --user=deploy --entrypoint=/bin/bash -p 9990:9990  -a stdout -it crossref/event-data-event-bus-mock
 

@@ -12,13 +12,14 @@
             [clj-time.core :as clj-time]
             [clj-time.format :as clj-time-format]
             [clj-time.coerce :as clj-time-coerce]
-            [clojure.java.io :refer [reader]]
-            [event-data-event-bus.storage.redis :as redis]
-            [event-data-event-bus.storage.s3 :as s3]
-            [event-data-event-bus.storage.store :as store]
+            [clojure.java.io :refer [reader input-stream]]
+            [event-data-common.jwt :as jwt]
+            [event-data-common.storage.redis :as redis]
+            [event-data-common.storage.s3 :as s3]
+            [event-data-common.storage.store :as store]
             [event-data-event-bus.schema :as schema]
             [event-data-event-bus.archive :as archive])
-  (:import [com.auth0.jwt JWTSigner JWTVerifier]
+  (:import
            [java.net URL MalformedURLException InetAddress])
   (:gen-class))
 
@@ -33,23 +34,28 @@
     24 ; 1 day
 ))
 
+(def redis-prefix
+  "Unique prefix applied to every key."
+  "event-data-bus:")
+
 (def up-since
   "Start the clock so we know approximately how long this instance has been running."
   (delay (clj-time/now)))
 
+(def default-redis-db-str "0")
+
 (def redis-store
   "A redis connection for storing subscription and short-term information."
-  (delay (redis/build)))
+  (delay (redis/build redis-prefix (:redis-host env) (Integer/parseInt (:redis-port env)) (Integer/parseInt (get env :redis-db default-redis-db-str)))))
 
 (def storage
   "A event-data-event-bus.storage.store.Store for permanently storing things"
   (delay
-    (condp = (:storage env)
-      ; Redis can be used for component testing ONLY.
-      "redis" (redis/build)
-      "s3" (s3/build)
-      ; Default is S3 for production and integration testing.
-      (s3/build))))
+    (condp = (:storage env "s3")
+      ; Redis can be used for component testing ONLY. Reuse the redis connection.
+      "redis" @redis-store
+      ; S3 is suitable for production.
+      "s3" (s3/build (:s3-key env) (:s3-secret env) (:s3-region-name env) (:s3-bucket-name env)))))
 
 (defresource home
   []
@@ -98,7 +104,7 @@
         yyyy-mm-dd (clj-time-format/unparse yyyy-mm-dd-format now)]
     [(assoc event :timestamp iso8601) yyyy-mm-dd]))
 
-;   "Create Events."
+; "Create Events."
 (defresource events
   []
   :allowed-methods [:post]
@@ -146,7 +152,7 @@
 
                               ; and we haven't sent it in the past
                               storage-check-ok)]
-                  
+
                   [allowed? {::event-id event-id
                             ::event-storage-key event-storage-key
                             ::event-date-storage-key event-date-storage-key
@@ -240,39 +246,12 @@
       (when response
         (assoc-in response [:headers "Access-Control-Allow-Origin"] "*")))))
 
-(defn get-token
-  "Middleware to retrieve a token from a request. Return nil if missing or malformed."
-  [request]
-  (let [auth-header (get-in request [:headers "authorization"])]
-    (when (and auth-header (.startsWith auth-header "Bearer "))
-      (.substring auth-header 7))))
-
-(defn try-verify-token
-  "Verify a JWT token using a supplied JWT verifier. Return the claims on success or nil."
-  [verifier token]
-  (try
-    (.verify verifier token)
-    ; Can be IllegalStateException, JsonParseException, SignatureException.
-    (catch Exception e nil)))
-
-(defn wrap-jwt
-  "Return a middleware handler that verifies JWT claims using one of the comma-separated secrets."
-  [handler secrets-str]
-  (let [secrets (clojure.string/split secrets-str #",")
-        verifiers (map #(new JWTVerifier %) secrets)]
-    (fn [request]
-      (let [token (get-token request)
-            matched-token (first (keep #(try-verify-token % token) verifiers))]
-        (if matched-token
-          (handler (assoc request :jwt-claims matched-token))
-          (handler request))))))
-
 (def app
   ; Delay construction to runtime for secrets config value.
   (delay
     (-> app-routes
        middleware-params/wrap-params
-       (wrap-jwt (:jwt-secrets env))
+       (jwt/wrap-jwt (:jwt-secrets env))
        (middleware-content-type/wrap-content-type)
        (wrap-cors))))
 

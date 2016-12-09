@@ -1,0 +1,11 @@
+version: '2'
+services:
+  test:
+    build: .
+    volumes:
+     - .:/codex
+     - ./.m2-cache:/home/deploy/.m2
+    environment:
+     - JWT_SECRETS=TEST,TEST2
+    command: "lein test :unit"
+

@@ -15,3 +15,4 @@ config
 *.rdb
 # Contains keys.
 local-integration-tests.sh
+.m2-cache

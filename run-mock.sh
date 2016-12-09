@@ -1,1 +1,0 @@
-docker run -p 9990:9990  -a stdout -it crossref/event-data-event-bus-mock

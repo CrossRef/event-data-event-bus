@@ -20,5 +20,3 @@ RUN chown -R deploy /home/deploy
 
 USER deploy
 RUN cd /home/deploy/event-data-event-bus && lein deps && lein compile
-
-ENTRYPOINT /home/deploy/event-data-event-bus/docker/prod.sh

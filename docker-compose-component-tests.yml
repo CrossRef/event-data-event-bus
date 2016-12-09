@@ -1,0 +1,19 @@
+version: '2'
+services:
+  test:
+    build: .
+    volumes:
+     - .:/code
+     - ./.m2-cache:/home/deploy/.m2
+    depends_on:
+     - redis
+    environment:
+     - REDIS_HOST=redis
+     - REDIS_PORT=6379
+     - REDIS_DB=0
+     - JWT_SECRETS=TEST,TEST2
+     - STORAGE=redis
+    command: "lein test :component"
+
+  redis:
+    image: redis
