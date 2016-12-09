@@ -1,5 +1,5 @@
 # To build and tag a version:
 
-docker build -f Dockerfile.prod -t crossref/event-data-event-bus:$TAG .
+docker build -f Dockerfile -t crossref/event-data-event-bus:$TAG .
 
 docker push crossref/event-data-event-bus:$TAG

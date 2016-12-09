@@ -10,13 +10,14 @@ RUN apt-get -y install curl
 
 RUN groupadd -r deploy && useradd -r -g deploy deploy
 RUN mkdir /home/deploy
+RUN chown -R deploy /home/deploy
 
 RUN curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein > /usr/bin/lein
 RUN chmod a+x /usr/bin/lein
 
-COPY . /home/deploy/event-data-event-bus
+COPY . /code
 
-RUN chown -R deploy /home/deploy
+RUN chown -R deploy /code
 
 USER deploy
-RUN cd /home/deploy/event-data-event-bus && lein deps && lein compile
+RUN cd /code && lein deps && lein compile
