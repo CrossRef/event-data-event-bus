@@ -1,4 +1,4 @@
-(defproject event-data-event-bus "0.1.2"
+(defproject event-data-event-bus "0.1.3"
   :description "Event Bus for Event Data"
   :url "http://eventdata.crossref.org/"
   :license {:name "MIT License"
