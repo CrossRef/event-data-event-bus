@@ -21,6 +21,7 @@ services:
      - S3_SECRET=${S3_SECRET}
      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
      - S3_REGION_NAME=${S3_REGION_NAME}
+     - STATUS_SERVICE=${STATUS_SERVICE}
 
   redis:
     image: redis

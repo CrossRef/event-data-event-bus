@@ -16,3 +16,4 @@ config
 # Contains keys.
 local-integration-tests.sh
 .m2-cache
+.env

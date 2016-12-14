@@ -18,8 +18,10 @@
             [event-data-common.storage.s3 :as s3]
             [event-data-common.storage.store :as store]
             [event-data-common.date :as date]
+            [event-data-common.status :as status]
             [event-data-event-bus.schema :as schema]
-            [event-data-event-bus.archive :as archive])
+            [event-data-event-bus.archive :as archive]
+            [overtone.at-at :as at-at])
   (:import
            [java.net URL MalformedURLException InetAddress])
   (:gen-class))
@@ -163,6 +165,7 @@
     ; Don't return the URL of the new event on the API (although it should be available),
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
+    (status/send! "event-bus" "event" "received" 1)
     (let [json (json/write-str (::event ctx))]
       (archive/save-event @storage (::event-id ctx) (::yyyy-mm-dd ctx) json))))
 
@@ -247,7 +250,14 @@
        (middleware-content-type/wrap-content-type)
        (wrap-cors))))
 
+(def schedule-pool (at-at/mk-pool))
+
+
 (defn run-server []
   (let [port (Integer/parseInt (:port env))]
+    (l/info "Start heartbeat")
+
+    (at-at/every 10000 #(status/send! "event-bus" "heartbeat" "tick" 1) schedule-pool)
+
     (l/info "Start server on " port)
     (server/run-server @app {:port port})))
