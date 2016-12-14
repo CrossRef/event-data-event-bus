@@ -17,6 +17,7 @@
             [event-data-common.storage.redis :as redis]
             [event-data-common.storage.s3 :as s3]
             [event-data-common.storage.store :as store]
+            [event-data-common.date :as date]
             [event-data-event-bus.schema :as schema]
             [event-data-event-bus.archive :as archive])
   (:import
@@ -92,7 +93,7 @@
                 (-> ctx :request :jwt-claims :sub))
   :handle-ok {"status" "ok"})
 
-(def yyyy-mm-dd-format (clj-time-format/formatter "yyyy-MM-dd"))
+
 
 
 (defn timestamp-event
@@ -101,7 +102,7 @@
   [event]
   (let [now (clj-time/now)
         iso8601 (str now)
-        yyyy-mm-dd (clj-time-format/unparse yyyy-mm-dd-format now)]
+        yyyy-mm-dd (clj-time-format/unparse date/yyyy-mm-dd-format now)]
     [(assoc event :timestamp iso8601) yyyy-mm-dd]))
 
 ; "Create Events."
@@ -130,18 +131,13 @@
                     [event yyyy-mm-dd] (timestamp-event (::payload ctx))
 
                     event-id (:id event)
-
-                    ; Store the event in two places: access by event id and by yyyy-mm-dd prefix
-                    ; Prefixes as short as possible to help with S3 load balancing.
-                    event-storage-key (str archive/event-prefix event-id)
-                    event-date-storage-key (str archive/day-prefix yyyy-mm-dd "/" event-id)
-                    
+                  
                     ; Do a quick check in Redis to see if the event already exists.
                     ; The mutex expires after a bit, long enough to cover any delay in S3 propagation.
                     quick-check-ok (redis/expiring-mutex!? @redis-store (str "exists" event-id) quick-check-expiry)
 
                     ; Also check permanent storage for existence.
-                    storage-check-ok (nil? (store/get-string @storage event-storage-key))
+                    storage-check-ok (nil? (store/get-string @storage (archive/storage-path-for-event event-id)))
 
                     allowed? (and
                               ; accept if the source matches
@@ -154,9 +150,8 @@
                               storage-check-ok)]
 
                   [allowed? {::event-id event-id
-                            ::event-storage-key event-storage-key
-                            ::event-date-storage-key event-date-storage-key
-                            ::event event}]))
+                             ::yyyy-mm-dd yyyy-mm-dd
+                             ::event event}]))
 
   :handle-malformed (fn [ctx]
                       (json/write-str (if-let [schema-errors (::schema-errors ctx)]
@@ -169,10 +164,7 @@
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
     (let [json (json/write-str (::event ctx))]
-      ; Store the event by its ID.
-      (store/set-string @storage (::event-storage-key ctx) json)
-      ; Also store the key for the per-day index. We only use the presence of the key. 
-      (store/set-string @storage (::event-date-storage-key ctx) ""))))
+      (archive/save-event @storage (::event-id ctx) (::yyyy-mm-dd ctx) json))))
 
 (defresource event
   [id]
@@ -195,7 +187,7 @@
                 (-> ctx :request :jwt-claims))
 
   :malformed? (fn [ctx]
-    (let [date (try (clj-time-format/parse yyyy-mm-dd-format date-str) (catch IllegalArgumentException _ nil))]
+    (let [date (try (clj-time-format/parse date/yyyy-mm-dd-format date-str) (catch IllegalArgumentException _ nil))]
       [(nil? date) {::date date}]))
   :allowed? (fn [ctx]
               ; The date argument specifies the start of the day for which we want events.

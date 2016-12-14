@@ -8,6 +8,7 @@
             [event-data-event-bus.server :as server]
             [event-data-event-bus.archive :as archive]
             [event-data-common.storage.store :as store]
+            [event-data-common.date :as date]
             [ring.mock.request :as mock]
             [clj-time.core :as clj-time]
             [clj-time.format :as clj-time-format]
@@ -40,6 +41,7 @@
   "A token from another universe."
   (delay "PLEASE_LET_ME_IN"))
 
+; This fixture is run for every test, including unit tests (though it's not required for unit tests).
 (defn clear-storage-fixture
   [f]
   ; Clear all keys from storage (could be Redis or S3 depending on config)
@@ -226,13 +228,13 @@
 
     (testing "Live Archive should reject dates after today"
       (clj-time/do-at today-midnight
-        (let [tomorrow-str (clj-time-format/unparse server/yyyy-mm-dd-format tomorrow-midnight)]
+        (let [tomorrow-str (clj-time-format/unparse date/yyyy-mm-dd-format tomorrow-midnight)]
           (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" tomorrow-str))
                                     (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Tomorrow's date should be forbidden."))))
 
     (testing "Live Archive should reject requests for dates that end precisely at midnight this morning unless we're at least an hour later."
-      (let [yesterday-str (clj-time-format/unparse server/yyyy-mm-dd-format yesterday-midnight)
+      (let [yesterday-str (clj-time-format/unparse date/yyyy-mm-dd-format yesterday-midnight)
             ; two hours after midnight this morning
             two-hours-later (clj-time/plus today-midnight (clj-time/hours 2))]
         

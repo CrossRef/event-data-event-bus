@@ -2,6 +2,7 @@ version: '2'
 services:
   test:
     build: .
+    user: deploy
     volumes:
      - .:/code
      - ./.m2-cache:/home/deploy/.m2

@@ -2,10 +2,19 @@ version: '2'
 services:
   test:
     build: .
+    user: deploy
     volumes:
-     - .:/codex
+     - .:/code
      - ./.m2-cache:/home/deploy/.m2
+    depends_on:
+     - redis
     environment:
      - JWT_SECRETS=TEST,TEST2
+     - STORAGE=redis
+     - REDIS_HOST=redis
+     - REDIS_PORT=6379
+     - REDIS_DB=0
     command: "lein test :unit"
 
+  redis:
+    image: redis

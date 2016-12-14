@@ -4,13 +4,12 @@
   :license {:name "MIT License"
             :url "https://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [event-data-common "0.1.2"]
+                 [event-data-common "0.1.6"]
                  [org.clojure/data.json "0.2.6"]
                  [crossref-util "0.1.10"]
                  [http-kit "2.1.18"]
                  [http-kit.fake "0.2.1"]
                  [liberator "0.14.1"]
-                 [compojure "1.5.1"]
                  [ring "1.5.0"]
                  [ring/ring-jetty-adapter "1.5.0"]
                  [ring/ring-servlet "1.5.0"]

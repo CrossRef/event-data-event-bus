@@ -3,6 +3,7 @@ services:
   demo:
     depends_on:
      - redis
+    user: deploy
     build: .
     ports:
      - '9002:9002'
