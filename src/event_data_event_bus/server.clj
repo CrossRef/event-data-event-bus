@@ -256,7 +256,6 @@
 (defn run-server []
   (let [port (Integer/parseInt (:port env))]
     (l/info "Start heartbeat")
-
     (at-at/every 10000 #(status/send! "event-bus" "heartbeat" "tick" 1) schedule-pool)
 
     (l/info "Start server on " port)
