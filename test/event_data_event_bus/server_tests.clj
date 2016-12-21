@@ -12,7 +12,8 @@
             [ring.mock.request :as mock]
             [clj-time.core :as clj-time]
             [clj-time.format :as clj-time-format]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [org.httpkit.fake :as fake])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]))
 
 (def signer
@@ -51,7 +52,12 @@
   ; Clear all keys from Redis.
   (doseq [k (store/keys-matching-prefix @server/redis-store "")]
     (store/delete @server/redis-store k))
-  (f))
+ 
+  ; For these tests we want to eat the downstream broadcasts and status updates.
+  (fake/with-fake-http ["http://endpoint1.com/endpoint" {:status 201}
+                        "http://endpoint2.com/endpoint" {:status 201}
+                        #"http://ebstatus:8003/.*" {:status 201}]
+    (f)))
 
 (use-fixtures :each clear-storage-fixture)
 

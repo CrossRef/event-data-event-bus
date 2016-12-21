@@ -21,6 +21,7 @@
             [event-data-common.status :as status]
             [event-data-event-bus.schema :as schema]
             [event-data-event-bus.archive :as archive]
+            [event-data-event-bus.downstream :as downstream]
             [overtone.at-at :as at-at])
   (:import
            [java.net URL MalformedURLException InetAddress])
@@ -170,7 +171,7 @@
       ; Send to all subscribers.
       (future
         (downstream/broadcast-live (::event ctx)))
-      
+
       ; And save.
       (archive/save-event @storage (::event-id ctx) (::yyyy-mm-dd ctx) json))))
 

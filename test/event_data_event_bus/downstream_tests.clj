@@ -62,8 +62,8 @@
 
 (deftest ^:component parse-environment-variables
   (testing "load-broadcast-config can read an environment variable configuration structure from real environment variables and produce a downstream configuration."
-    (is (= {:live #{{:label "1", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE", :type "live"}
-                    {:label "2", :type "live", :name "Endpoint Two", :jwt "JWT-TWO", :endpoint "http://endpoint2.com/endpoint"}},
+    (is (= {:live #{{:label "1", :type "live", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE"}
+                    {:label "2", :type "live", :name "Endpoint Two", :endpoint "http://endpoint2.com/endpoint", :jwt "JWT-TWO"}},
             :batch #{}}
            (downstream/load-broadcast-config)) "Correct structure should be retrieved ")
     (is (= @downstream/downstream-config-cache (downstream/load-broadcast-config)) "Config should be cached.")))

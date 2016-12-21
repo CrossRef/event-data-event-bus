@@ -4,7 +4,7 @@ services:
     build: .
     user: deploy
     volumes:
-     - .:/code
+     - .:/user/src/app
      - ./.m2-cache:/home/deploy/.m2
     depends_on:
      - redis

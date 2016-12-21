@@ -3,7 +3,7 @@ services:
   redis:
     image: redis
 
-  ebstatus:
+  ebcstatus:
     image: crossref/event-data-status:0.1.2
     expose:
      - "8003"
@@ -23,11 +23,11 @@ services:
     build: .
     user: deploy
     volumes:
-     - .:/code
+     - .:/user/src/app
      - ./.m2-cache:/home/deploy/.m2
     depends_on:
      - redis
-     - ebstatus
+     - ebcstatus
     environment:
      - REDIS_HOST=redis
      - REDIS_PORT=6379

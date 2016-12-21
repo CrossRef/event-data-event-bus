@@ -266,13 +266,13 @@ Note that integration and component tests must be run separately because they ha
 
 Unit tests are for functions. They can be run in any context.
 
- - `time docker-compose -f docker-compose-unit-tests.yml run -w /code test lein test :unit`
+ - `time docker-compose -f docker-compose-unit-tests.yml run -w /user/src/app test lein test :unit`
 
 ### Component tests
 
 These are generally at the API level and require Redis to be configured. They mock out S3 dependencies using Redis for convenience. Use the Mock image to use a bundled Redis instance:
 
- - `time docker-compose -f docker-compose-component-tests.yml run -w /code test lein test :component`
+ - `time docker-compose -f docker-compose-component-tests.yml run -w /user/src/app test lein test :component`
 
 ### Integration tests
 
@@ -287,7 +287,7 @@ These run at the API level and test integration with S3, and therefore must be c
 
 Then
 
- - `time docker-compose -f docker-compose-integration-tests.yml run -w /code test lein test :integration`
+ - `time docker-compose -f docker-compose-integration-tests.yml run -w /user/src/app test lein test :integration`
 
 If the bucket is not empty, tests will still pass, but it may take a long time to clear the bucket. The AWS command-line tools provide a quick parallel way to empty a bucket **but exercise caution**:
 
@@ -300,13 +300,13 @@ If the bucket is not empty, tests will still pass, but it may take a long time t
 This should be run with Docker Swarm for load-balancing, service discovery and fail-over. Details can be found in the Event Data System repository.
 
  - command: `lein run`
- - directory: `/code`
+ - directory: `/user/src/app`
 
 ### Running a demo instance for development
 
 During development when changes are being made to the local repository you can run the mock container and mount the source code directory as a volume. 
 
-    docker-compose -f docker-compose-demo.yml run -w /code demo lein run
+    docker-compose -f docker-compose-demo.yml run -w /user/src/app demo lein run
 
 To rebuild
 
