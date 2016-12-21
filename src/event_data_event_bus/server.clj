@@ -167,6 +167,11 @@
     ; We still check the `event/«id»` endpoint for component testing though.
     (status/send! "event-bus" "event" "received" 1)
     (let [json (json/write-str (::event ctx))]
+      ; Send to all subscribers.
+      (future
+        (downstream/broadcast-live (::event ctx)))
+      
+      ; And save.
       (archive/save-event @storage (::event-id ctx) (::yyyy-mm-dd ctx) json))))
 
 (defresource event

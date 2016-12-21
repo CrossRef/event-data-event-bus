@@ -220,10 +220,6 @@ Note that during development and testing Docker Compose refers to the `.env` fil
 
 | Environment variable | Description                         | Default | Required? |
 |----------------------|-------------------------------------|---------|-----------|
-| `LIVE_RETRIES`       | Number of tries to deliver Live     | 10      | Yes       |
-| `LIVE_BACKOFF`       | Seconds between delivery Live       | 10      | Yes       |
-| `LIVE_RETRIES`       | Number of tries to deliver Batch    | 10      | Yes       |
-| `BATCH_BACKOFF`      | Seconds between delivery Batch      | 10      | Yes       |
 | `REDIS_HOST`         | Redis host                          |         | Yes       |
 | `REDIS_PORT`         | Redis port                          |         | Yes       |
 | `REDIS_DB`           | Redis DB number                     | 0       | No        |
@@ -236,6 +232,24 @@ Note that during development and testing Docker Compose refers to the `.env` fil
 | `JWT_SECRETS`        | Comma-separated list of JTW Secrets |         | Yes |
 | `TASK_WORKER`        | Is this the background task worker? | TRUE    | Yes |
 | `STORAGE`            | Where to put permanent storage, "redis" or "s3". "redis" is only for testing. | s3 | No |
+
+Downstream subscribers are also specified by environment variables. Each subscriber must supply the following options:
+
+ - `JWT` a JWT token to be passed in a Authorization Bearer header
+ - `ENDPOINT` a full URL for the event to be sent to
+ - `NAME` a descriptive name
+ - `TYPE` one of 'live' or 'batch'
+
+The subscriber must also have a label to identify it. Each subscriber should supply the following environment variables:
+
+ - `BROADCAST-«label»-JWT`
+ - `BROADCAST-«label»-ENDPOINT`
+ - `BROADCAST-«label»-NAME`
+ - `BROADCAST-«label»-TYPE`
+
+It is not compulsory to have any subscribers, but each one must come in a complete bock of all fields.
+
+An example configuration is supplied in the `docker-compose-component-tests.yml` file.
 
 ## Tests
 

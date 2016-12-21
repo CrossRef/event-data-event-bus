@@ -15,7 +15,17 @@
             [clj-time.core :as clj-time]
             [clj-time.format :as clj-time-format]
             [clojure.string :as string]
-            [config.core :refer [env]]))
+            [config.core :refer [env]]
+            [event-data-common.backoff :as backoff]
+            [org.httpkit.client :as client]))
+
+(def retries
+  "Try to deliver this many times downstream."
+  5)
+
+(def retry-delay
+  "Wait in milliseconds before first redelivery attempt. Retry will double each time."
+  (* 10 1000))
 
 (def downstream-config-cache (atom nil))
 
@@ -64,8 +74,10 @@
          ; Then we just want to group by the type (and turn the key into a keyword).
          ; Also return the list as a set because order isn't significant.
          type-groups (into {} (map (fn [[k v]] [(keyword k) (set v)])
-                                     (group-by :type downstreams)))]
+                                     (group-by :type downstreams)))
 
+         ; Default values for each, in case there are none of either.
+         result (merge {:live #{} :batch #{}} type-groups)]
 
     (when-not all-keys-present?
       (log/error "Failed to read config for downstream subscribers: Missing config keys."))
@@ -74,7 +86,7 @@
       (log/error "Failed to read config for downstream subscribers: Unknown subscription type."))
 
    ; Nil if it didn't work.
-   (when (and all-keys-present? all-types-known?) type-groups)))
+   (when (and all-keys-present? all-types-known?) result)))
 
 (defn load-broadcast-config
   []
@@ -83,3 +95,24 @@
   (if-let [cached @downstream-config-cache]
     cached
     (reset! downstream-config-cache (parse-broadcast-config env))))
+
+
+(defn broadcast-live
+  "Accept incoming event and broadcast to live downstream subscribers."
+  [event-structure]
+  ; Most of the heavy lifting is done by `backoff`.
+  (let [live-downstreams (:live @downstream-config-cache)
+        body-json (json/write-str event-structure)]
+    (log/info "Recieve event for live broadcast:" (:id event-structure) "to" (count live-downstreams))
+    (doseq [downstream live-downstreams]
+      (backoff/try-backoff
+        ; Exception thrown if not 200 or 201, also if some other exception is thrown during the client posting.
+        #(let [response @(client/post (:endpoint downstream) {:body body-json})]
+            (when-not (#{201 200} (:status response)) (throw (new Exception (str "Failed to send to downstream " (:label downstream) "at URL: " (:endpoint downstream) " with status code: " (:status response))))))
+        retry-delay
+        retries
+        ; Only log info on retry because it'll be tried again.
+        #(log/info "Error broadcasting" (:id event-structure) "to downstream" (:label downstream) "with exception" (.getMessage %))
+        ; But if terminate is called, that's a serious problem.
+        #(log/error "Failed to send event" (:id event-structure) "to downstream" (:label downstream))
+        #(log/info "Finished broadcasting" (:id event-structure) "to downstream" (:label downstream))))))

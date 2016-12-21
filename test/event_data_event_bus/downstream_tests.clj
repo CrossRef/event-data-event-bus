@@ -6,7 +6,8 @@
   (:require [clojure.test :refer :all]
             [clojure.data.json :as json]
             [config.core :refer [env]]
-            [event-data-event-bus.downstream :as downstream]))
+            [event-data-event-bus.downstream :as downstream]
+            [org.httpkit.fake :as fake]))
 
 (def good-config-map
   "A config map such as that supplied by config.core"
@@ -61,12 +62,84 @@
 
 (deftest ^:component parse-environment-variables
   (testing "load-broadcast-config can read an environment variable configuration structure from real environment variables and produce a downstream configuration."
-    (is (= {:live #{{:label "1", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE", :type "live"}},
-            :batch #{{:label "2", :type "batch", :name "Endpoint Two", :jwt "JWT-TWO", :endpoint "http://endpoint2.com/endpoint"}}}
+    (is (= {:live #{{:label "1", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE", :type "live"}
+                    {:label "2", :type "live", :name "Endpoint Two", :jwt "JWT-TWO", :endpoint "http://endpoint2.com/endpoint"}},
+            :batch #{}}
            (downstream/load-broadcast-config)) "Correct structure should be retrieved ")
     (is (= @downstream/downstream-config-cache (downstream/load-broadcast-config)) "Config should be cached.")))
 
+(deftest ^:component incoming-outgoing
+  (testing "All incoming events should be sent to all listeners, even unreliable ones."
+    ; Pre-check that we got what we expected.
+    (is (= {:live #{{:label "1", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE", :type "live"}
+                    {:label "2", :type "live", :name "Endpoint Two", :jwt "JWT-TWO", :endpoint "http://endpoint2.com/endpoint"}},
+            :batch #{}}
+           (downstream/load-broadcast-config)) "Correct structure should be retrieved ")
+      
+      ; We have unreliable downstream agents.
+      (let [endpoint-1-i (atom -1)
+            endpoint-2-i (atom -1)
+
+            good-response {:status 201 :body "Good!"}
+            bad-response {:status 400 :body "Bad?"}
+            error-response {:status 500 :body "Ugly‽"}
+
+            ; A selection of unreliable, but ultimately functional downstream consumers.
+            endpoint-1-responses [bad-response error-response good-response]
+            endpoint-2-responses [error-response bad-response good-response]
+
+            ; We'll need to block the test because this is asynchronous.
+            endpoint-1-done (promise)
+            endpoint-2-done (promise)
+
+            ; Collect the bodies that are sent.
+            sent-1 (atom (list))
+            sent-2 (atom (list))
+
+            ; Two monitors so our test can wait until everything's finished running.
+            monitor-1 (promise)
+            monitor-2 (promise)]
+
+        ; Fake endpoints that step through the sequence of responses.
+        (fake/with-fake-http ["http://endpoint1.com/endpoint"
+                              (fn [orig-fn opts callback] 
+                                ; Increment counter.
+                                (swap! endpoint-1-i inc)
+                                
+                                ; When we reach the end, deliver the promise so that the test can stop waiting.
+                                (when (= good-response (endpoint-1-responses @endpoint-1-i))
+                                  ; Save the body that was sent on a successful response.
+                                  (swap! sent-1 #(conj % (:body opts)))
+                                  (deliver monitor-1 1))
+
+                                ; Return the predetermined response per counter.
+                                (nth endpoint-1-responses @endpoint-1-i))
 
 
+                              "http://endpoint2.com/endpoint"
+                              (fn [orig-fn opts callback] 
 
+                                ; Increment counter.
+                                (swap! endpoint-2-i inc)
+
+                                ; When we reach the end, deliver the promise so that the test can stop waiting.
+                                (when (= good-response (endpoint-2-responses @endpoint-2-i))
+                                  ; Save the body that was sent on a successful response.
+                                  (swap! sent-2 #(conj % (:body opts)))
+                                  (deliver monitor-2 1))
+
+                                ; Return the predetermined response per counter.
+                                (nth endpoint-2-responses @endpoint-2-i))]
+
+
+          ; Broadcast using the configuration from environment variables and see what happens.
+          ; A tiny Event with only an ID. Not technically valid, but enough to test.
+          (downstream/broadcast-live {:id "d24e5449-7835-44f4-b7e6-289da4900cd0"})
+
+          ; Wait for everything to complete.
+          @monitor-1
+          @monitor-2
+
+          (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @sent-1) "Correct body should be sent to endpoint 1 exactly once.")
+          (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @sent-2) "Correct body should be sent to endpoint 2 exactly once.")))))
 

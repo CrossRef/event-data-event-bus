@@ -43,7 +43,7 @@ services:
      - BROADCAST-2-JWT=JWT-TWO
      - BROADCAST-2-ENDPOINT=http://endpoint2.com/endpoint
      - BROADCAST-2-NAME=Endpoint Two
-     - BROADCAST-2-TYPE=batch
+     - BROADCAST-2-TYPE=live
     command: "lein test :component"
 
 
