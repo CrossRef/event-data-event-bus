@@ -1,7 +1,7 @@
 # Event Data Event Bus Mock
 # Production build of Crossref Event Data Event Bus
 
-FROM lein-2.7.1-alpine
+FROM clojure:lein-2.7.0-alpine
 MAINTAINER Joe Wass jwass@crossref.org
 
 COPY . /usr/src/app

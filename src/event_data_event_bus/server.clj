@@ -264,5 +264,9 @@
     (l/info "Start heartbeat")
     (at-at/every 10000 #(status/send! "event-bus" "heartbeat" "tick" 1) schedule-pool)
 
+    (l/info "Load broadcast config...")
+    @downstream/downstream-config-cache
+    (l/info "Loaded broadcast config.")
+
     (l/info "Start server on " port)
     (server/run-server @app {:port port})))

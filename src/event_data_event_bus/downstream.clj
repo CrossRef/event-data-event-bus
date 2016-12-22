@@ -27,8 +27,6 @@
   "Wait in milliseconds before first redelivery attempt. Retry will double each time."
   (* 10 1000))
 
-(def downstream-config-cache (atom nil))
-
 (defn parse-broadcast-config
   "Read a broadcast structure from a structure containing environment variables.
    Return {:live list-of-endpoints
@@ -90,18 +88,18 @@
 
 (defn load-broadcast-config
   []
-  "Load broadcast configuration structure from environment variable config.
-   Then cache in an atom."
-  (if-let [cached @downstream-config-cache]
-    cached
-    (reset! downstream-config-cache (parse-broadcast-config env))))
-
+  "Load broadcast configuration structure from environment variable config."
+   (let [value (parse-broadcast-config env)]
+      (log/info "Loaded broadcast config:" (count (:live value)) "live and " (count (:batch value)) "batch")
+   value))
+   
+(def downstream-config-cache (delay (load-broadcast-config)))
 
 (defn broadcast-live
   "Accept incoming event and broadcast to live downstream subscribers."
   [event-structure]
   ; Most of the heavy lifting is done by `backoff`.
-  (let [live-downstreams (:live @downstream-config-cache)
+  (let [live-downstreams (:live (load-broadcast-config))
         body-json (json/write-str event-structure)]
     (log/info "Recieve event for live broadcast:" (:id event-structure) "to" (count live-downstreams))
     (doseq [downstream live-downstreams]
