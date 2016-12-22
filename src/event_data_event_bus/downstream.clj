@@ -105,7 +105,7 @@
     (doseq [downstream live-downstreams]
       (backoff/try-backoff
         ; Exception thrown if not 200 or 201, also if some other exception is thrown during the client posting.
-        #(let [response @(client/post (:endpoint downstream) {:body body-json})]
+        #(let [response @(client/post (:endpoint downstream) {:headers {"authorization" (str "Bearer " (:jwt downstream))} :body body-json})]
             (when-not (#{201 200} (:status response)) (throw (new Exception (str "Failed to send to downstream " (:label downstream) "at URL: " (:endpoint downstream) " with status code: " (:status response))))))
         retry-delay
         retries
