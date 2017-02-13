@@ -23,7 +23,7 @@ services:
   demo:
     build: .
     volumes:
-     - .:/user/src/app
+     - .:/usr/src/app
      - ./.m2-cache:/home/deploy/.m2
     depends_on:
      - redis
