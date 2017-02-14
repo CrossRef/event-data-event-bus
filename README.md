@@ -1,5 +1,7 @@
 # Event Data Bus
 
+<img src="doc/ouroboros.png" align="right" style="float: right">
+
 The Event Data Bus is an internal component of the Event Data service. It is a central service that accepts data from Event Data Agents and distributes to other services. It is a piece of common infrastructure shared by Crossref and DataCite, and enables the various public-facing services offered under the Crossref Event Data and DataCite Event Data.
 
 The Event Data Bus is responsible for the following:
