@@ -2,7 +2,6 @@ version: '2'
 services:
   test:
     build: .
-    user: deploy
     volumes:
      - .:/usr/src/app
      - ./.m2-cache:/root/.m2

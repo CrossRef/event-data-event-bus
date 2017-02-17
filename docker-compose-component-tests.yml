@@ -21,10 +21,9 @@ services:
 
   test:
     build: .
-    user: deploy
     volumes:
      - .:/usr/src/app
-     - ./.m2-cache:/home/deploy/.m2
+     - ./.m2-cache:/.m2
     depends_on:
      - redis
      - ebcstatus
