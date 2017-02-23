@@ -1,6 +1,6 @@
 (ns event-data-event-bus.archive
   (:require [clojure.data.json :as json]
-            [clojure.tools.logging :as l]
+            [clojure.tools.logging :as log]
             [clj-time.core :as clj-time]
             [clj-time.format :as clj-time-format])
   (:require [event-data-common.storage.store :as store]
@@ -30,16 +30,22 @@
         ; We get back a key with the day-prefix. The actual data is stored in the event-prefix.
         ; i.e. "d/YYYY-MM-DD/1234" -> "e/1234"
         prefix-length (+ (.length day-prefix) (.length "YYYY-MM-DD/"))
-        event-keys (map #(str event-prefix (.substring ^String % prefix-length)) date-keys)
+        event-keys (doall (map #(str event-prefix (.substring ^String % prefix-length)) date-keys))
+        num-keys (count event-keys)
 
         ; Retrieve every event for every key.
         ; S3 performs well in parallel, so fetch items in parallel.
-        future-event-blobs (map #(future (store/get-string storage %)) event-keys)
+        counter (atom 0)
+        future-event-blobs (map #(future
+                                   (swap! counter inc)
+                                   (when (zero? (mod @counter 1000))
+                                     (log/info "Building archive for" date-str "retrieved" @counter "/" num-keys " = " (int (* 100 (/ @counter num-keys))) "%"))
+                                   (store/get-string storage %)) event-keys)
         event-blobs (map deref future-event-blobs)
         all-events (map json/read-str event-blobs)
 
         timestamp (str (clj-time/now))]
-    (l/info "Archive for" date-str "got" (count event-keys))
+    (log/info "Archive for" date-str "got" num-keys "keys and" (count event-blobs) "events")
     {"archive-generated" timestamp
      "events" all-events}))
 

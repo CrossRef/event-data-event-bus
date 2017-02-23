@@ -27,7 +27,7 @@
            [java.net URL MalformedURLException InetAddress])
   (:gen-class))
 
-(def event-data-homepage "http://eventdata.crossref.org/")
+(def event-data-homepage "https://www.crossref.org/services/event-data")
 
 (def quick-check-expiry
   "How long in milliseconds before mutex for quick-check expires? Should cover any delay in S3 propagagion."
