@@ -190,6 +190,8 @@ All Events are subject to the Event schema. If an Event is sent that does not co
 
 ## Running the service
 
+Two services must be run. The main bus worker handles accepting and broadcasting data, and should be run with replication. The schedule worker should be run with replication of 1, and is responsible for creating daily archives.
+
 ### Starting and stopping
 
 The service responds gracefully to `SIGTERM` by stopping access (i.e. the HTTP server stops responding to all endpoints), and then delivering all outgoing messages, then exiting. On successful exit, a 0 exit code is returned. If there was an error, an exit code of 1 is returned (all errors will be recorded in the log). This behaviour enables a rolling update to a group of instances in a cluster.
@@ -232,7 +234,6 @@ Note that during development and testing Docker Compose refers to the `.env` fil
 | `PORT`               | Port to listen on                   | 9990    | Yes         |
 | `STATUS_SERVICE`     | Public URL of the Status service    |         | No, ignored if not supplied |
 | `JWT_SECRETS`        | Comma-separated list of JTW Secrets |         | Yes |
-| `TASK_WORKER`        | Is this the background task worker? | TRUE    | Yes |
 | `STORAGE`            | Where to put permanent storage, "redis" or "s3". "redis" is only for testing. | s3 | No |
 
 Downstream subscribers are also specified by environment variables. Each subscriber must supply the following options:
@@ -301,8 +302,14 @@ If the bucket is not empty, tests will still pass, but it may take a long time t
 
 This should be run with Docker Swarm for load-balancing, service discovery and fail-over. Details can be found in the Event Data System repository.
 
+Bus workers:
+
  - command: `lein run`
- - directory: `/usr/src/app`
+
+Single archive schedule workers:
+
+ - command: `lein run schedule`
+
 
 ### Running a demo instance for development
 

@@ -2,11 +2,20 @@
   (:require [clojure.data.json :as json]
             [clojure.tools.logging :as log]
             [clj-time.core :as clj-time]
-            [clj-time.format :as clj-time-format])
-  (:require [event-data-common.storage.store :as store]
-            [event-data-common.storage.store :refer [Store]]))
-
-
+            [clj-time.format :as clj-time-format]
+            [clj-time.periodic :as clj-time-periodic]
+            [event-data-common.storage.store :as store]
+            [event-data-common.storage.store :refer [Store]]
+            [event-data-common.storage.s3 :as s3]
+            [event-data-common.date :as date]
+            [config.core :refer [env]]
+            [clojurewerkz.quartzite.triggers :as qt]
+            [clojurewerkz.quartzite.jobs :as qj]
+            [clojurewerkz.quartzite.schedule.daily-interval :as daily]
+            [clojurewerkz.quartzite.schedule.calendar-interval :as cal]
+            [clojurewerkz.quartzite.jobs :refer [defjob]]
+            [clojurewerkz.quartzite.scheduler :as qs]
+            [clojurewerkz.quartzite.schedule.cron :as qc]))
 
 ; Prefixes as short as possible to help with S3 load balancing.
 (def day-prefix
@@ -55,6 +64,17 @@
   (let [archive (archive-for storage date-str)]
     (store/set-string storage (str archive-prefix date-str) (json/write-str archive))))
 
+(defn save-archive-if-not-exists
+  [storage date]
+  (let [date-str (clj-time-format/unparse date/yyyy-mm-dd-format date)
+        filename (str archive-prefix date-str)
+        exists? (= (store/keys-matching-prefix storage filename) [filename])]
+    (log/info "Build archive, if missing, for" filename)
+    (if exists?
+      (log/info "Exists, skipping" filename)
+      (save-archive storage date-str)))
+  (log/info "Done archive"))
+
 (defn storage-path-for-event [event-id]
   (str event-prefix event-id))
 
@@ -71,3 +91,42 @@
     ; Also store the key for the per-day index. We only use the presence of the key. 
     (store/set-string storage event-date-storage-key "")))
 
+(def storage
+  (delay (s3/build (:s3-key env) (:s3-secret env) (:s3-region-name env) (:s3-bucket-name env))))
+
+(defjob yesterday-archive-job
+  [ctx]
+  (log/info "Starting yesterday's archive...")
+  
+  (save-archive-if-not-exists
+    @storage
+    (clj-time/minus (clj-time/now) (clj-time/days 1)))
+
+  (log/info "Saved yesterday's archive."))
+
+(defn run-archive-schedule
+  "Start schedule to generate daily archive. Block."
+  []
+  (log/info "Start scheduler")
+  (let [s (-> (qs/initialize) qs/start)
+        job (qj/build
+              (qj/of-type yesterday-archive-job)
+              (qj/with-identity (qj/key "jobs.noop.1")))
+        trigger (qt/build
+                  (qt/with-identity (qt/key "triggers.1"))
+                  (qt/start-now)
+                  (qt/with-schedule (daily/schedule
+                                      (qc/cron-schedule "30 0 * * *"))))]
+  (qs/schedule s job trigger)))
+
+(defn run-archive-all-since
+  "Accept YYYY-MM-DD date string and make sure all archives exist between then and yesterday."
+  [date-str]
+  (let [start-date (clj-time-format/parse date/yyyy-mm-dd-format date-str)
+        end-date (clj-time/minus (clj-time/now) (clj-time/days 1))
+        date-range (take-while #(clj-time/before? % end-date)
+                     (clj-time-periodic/periodic-seq start-date (clj-time/days 1)))]
+    (doseq [date date-range]
+      (log/info "Check" date)
+      (save-archive-if-not-exists @storage date))
+    (log/info "Done checking dates")))

@@ -1,10 +1,10 @@
-(defproject event-data-event-bus "0.1.7"
+(defproject event-data-event-bus "0.1.8"
   :description "Event Bus for Event Data"
   :url "http://eventdata.crossref.org/"
   :license {:name "MIT License"
             :url "https://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [event-data-common "0.1.15"]
+                 [event-data-common "0.1.17"]
                  [org.clojure/data.json "0.2.6"]
                  [crossref-util "0.1.10"]
                  [http-kit "2.1.18"]
@@ -30,7 +30,8 @@
                  [org.apache.commons/commons-io "1.3.2"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.apache.logging.log4j/log4j-core "2.6.2"]
-                 [org.slf4j/slf4j-simple "1.7.21"]]
+                 [org.slf4j/slf4j-simple "1.7.21"]
+                 [clojurewerkz/quartzite "2.0.0"]]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
   :test-selectors {:default (constantly true)

@@ -206,8 +206,6 @@
 
                     ; The latest it can be is midnight at the start of today (i.e. end of yesterday).
                     ; Add an extra hour to allow storage to propagate.
-                    ; midnight (clj-time/today-at-midnight)
-                    ; minimum (clj-time/date-time (clj-time/year midnight) (clj-time/month midnight) (clj-time/day midnight) 1 0 0)
                     latest (clj-time/minus (clj-time/now) (clj-time/hours 1))
 
                     allowed (clj-time/before? end-date latest)]
