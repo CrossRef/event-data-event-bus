@@ -97,11 +97,9 @@
 (defjob yesterday-archive-job
   [ctx]
   (log/info "Starting yesterday's archive...")
-  
   (save-archive-if-not-exists
     @storage
     (clj-time/minus (clj-time/now) (clj-time/days 1)))
-
   (log/info "Saved yesterday's archive."))
 
 (defn run-archive-schedule
@@ -115,8 +113,7 @@
         trigger (qt/build
                   (qt/with-identity (qt/key "triggers.1"))
                   (qt/start-now)
-                  (qt/with-schedule (daily/schedule
-                                      (qc/cron-schedule "30 0 * * *"))))]
+                  (qt/with-schedule (qc/cron-schedule "0 30 0 * * ?")))]
   (qs/schedule s job trigger)))
 
 (defn run-archive-all-since
