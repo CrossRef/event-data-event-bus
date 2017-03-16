@@ -166,8 +166,10 @@
     ; Don't return the URL of the new event on the API (although it should be available),
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
-    (status/send! "event-bus" "event" "received" 1)
+    (status/add! "event-bus" "event" "received" 1)
     (let [json (json/write-str (::event ctx))]
+      (status/add! "event-bus" "event-by-source" (-> ctx ::payload :source_id) 1)
+
       ; Send to all subscribers.
       (future
         (downstream/broadcast-live (::event ctx)))

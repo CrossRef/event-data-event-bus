@@ -8,5 +8,7 @@
   (condp = (first args) 
     "schedule" (run-archive-schedule)
     "historical-archive" (run-archive-all-since (second args))
-    :default (run-server)))
+    (run-server)))
+
+
 
