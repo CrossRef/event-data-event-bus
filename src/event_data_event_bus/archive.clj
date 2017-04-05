@@ -17,6 +17,9 @@
             [clojurewerkz.quartzite.scheduler :as qs]
             [clojurewerkz.quartzite.schedule.cron :as qc]))
 
+(def date-format
+  (:date-time-no-ms clj-time-format/formatters))
+
 ; Prefixes as short as possible to help with S3 load balancing.
 (def day-prefix
   "Prefix under which events are stored with their date, e.g. 'd/2016-11-27/86accb20-1c8f-483d-8567-52ad031ba190'"
@@ -53,7 +56,7 @@
         event-blobs (map deref future-event-blobs)
         all-events (map json/read-str event-blobs)
 
-        timestamp (str (clj-time/now))]
+        timestamp (clj-time-format/unparse date-format (clj-time/now))]
     (log/info "Archive for" date-str "got" num-keys "keys and" (count event-blobs) "events")
     {"archive-generated" timestamp
      "events" all-events}))

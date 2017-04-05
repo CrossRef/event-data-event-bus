@@ -409,7 +409,7 @@
     (let [response (@server/app
                      (mock/request :get "/"))]
       (is (= (get-in response [:status]) 302))
-      (is (= (get-in response [:headers "Location"]) "http://eventdata.crossref.org/")))))
+      (is (= (get-in response [:headers "Location"]) "https://www.crossref.org/services/event-data")))))
 
 (deftest ^:component heartbeat-ok
   (testing "Heartbeat should return OK. This includes connection to external services."
