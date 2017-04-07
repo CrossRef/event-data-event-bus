@@ -29,6 +29,9 @@
 
 (def event-data-homepage "https://www.crossref.org/services/event-data")
 
+(def date-format
+  (:date-time-no-ms clj-time-format/formatters))
+
 (def quick-check-expiry
   "How long in milliseconds before mutex for quick-check expires? Should cover any delay in S3 propagagion."
   (*
@@ -104,7 +107,7 @@
    Return [event, 'YYYY-MM-DD']"
   [event]
   (let [now (clj-time/now)
-        iso8601 (str now)
+        iso8601 (clj-time-format/unparse date-format now)
         yyyy-mm-dd (clj-time-format/unparse date/yyyy-mm-dd-format now)]
     [(assoc event :timestamp iso8601) yyyy-mm-dd]))
 
