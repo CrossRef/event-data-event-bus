@@ -90,7 +90,7 @@
   []
   "Load broadcast configuration structure from environment variable config."
    (let [value (parse-broadcast-config env)]
-      (log/info "Loaded broadcast config:" (count (:live value)) "live and " (count (:batch value)) "batch")
+      (log/debug "Loaded broadcast config:" (count (:live value)) "live and " (count (:batch value)) "batch")
    value))
    
 (def downstream-config-cache (delay (load-broadcast-config)))
@@ -101,7 +101,7 @@
   ; Most of the heavy lifting is done by `backoff`.
   (let [live-downstreams (:live (load-broadcast-config))
         body-json (json/write-str event-structure)]
-    (log/info "Recieve event for live broadcast:" (:id event-structure) "to" (count live-downstreams))
+    (log/debug "Recieve event for live broadcast:" (:id event-structure) "to" (count live-downstreams))
     (doseq [downstream live-downstreams]
       (backoff/try-backoff
         ; Exception thrown if not 200 or 201, also if some other exception is thrown during the client posting.
@@ -113,4 +113,4 @@
         #(log/info "Error broadcasting" (:id event-structure) "to downstream" (:label downstream) "with exception" (.getMessage %))
         ; But if terminate is called, that's a serious problem.
         #(log/error "Failed to send event" (:id event-structure) "to downstream" (:label downstream))
-        #(log/info "Finished broadcasting" (:id event-structure) "to downstream" (:label downstream))))))
+        #(log/debug "Finished broadcasting" (:id event-structure) "to downstream" (:label downstream))))))
