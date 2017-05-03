@@ -78,10 +78,16 @@
                                 "live" %
                                 "batch" %
                                 "activemq-queue" (assoc %
-                                                   :factory (new org.apache.activemq.ActiveMQConnectionFactory
-                                                               (:username %)
-                                                               (:password %)
-                                                               (:endpoint %)))
+                                                    :connection (future
+                                                                  (let [factory (new org.apache.activemq.ActiveMQConnectionFactory
+                                                                                  (:username %)
+                                                                                  (:password %)
+                                                                                  (:endpoint %))
+                                                                        connection (.createConnection factory)
+                                                                        session (.createSession connection false, Session/AUTO_ACKNOWLEDGE)
+                                                                        destination (.createQueue session (:queue %))
+                                                                        producer (.createProducer session destination)]
+                                                                    {:factory factory :producer producer :session session})))
                                 %)
                              downstreams)
 
@@ -114,13 +120,9 @@
 (def downstream-config-cache (delay (load-broadcast-config)))
 
 (defn enqueue
-  [factory queue-name data-str]
-  (with-open [connection (.createConnection factory)]
-    (let [session (.createSession connection false, Session/AUTO_ACKNOWLEDGE)
-          destination (.createQueue session queue-name)
-          producer (.createProducer session destination)
-          message (.createTextMessage session data-str)]
-      (.send producer message))))
+  [session producer queue-name data-str]
+  (let [message (.createTextMessage session data-str)]
+      (.send producer message)))
 
 (defn broadcast-live
   "Accept incoming event and broadcast to live downstream subscribers."
@@ -134,7 +136,7 @@
     ; Send to queues.
     (doseq [downstream (:activemq-queue @downstream-config-cache)]
       (backoff/try-backoff
-        #(enqueue (:factory downstream) (:queue downstream) body-json)
+        #(enqueue (-> downstream :connection deref :session) (-> downstream :connection deref :producer) (:queue downstream) body-json)
         retry-delay
         retries
         ; Only log info on retry because it'll be tried again.

@@ -33,7 +33,7 @@
 
    :broadcast-myqueue-username "myusername"
    :broadcast-myqueue-password "mypassword"
-   :broadcast-myqueue-endpoint "tcp://my-active-mq-endpoint"
+   :broadcast-myqueue-endpoint "tcp://my-active-mq-endpoint:61616"
    :broadcast-myqueue-queue "my-queue"
    :broadcast-myqueue-name "ActiveMQ Query API"
    :broadcast-myqueue-type "activemq-queue"
@@ -58,8 +58,8 @@
                     {:label "datacite" :type "batch" :jwt "JWT_FOR_DATACITE" :endpoint "http://datcite.org/endpoint" :name "Endpoint for DataCite"}])}))
 
     ; Factory doesn't implement equality. That's probably a good thing.
-    (is (= (-> good-result :activemq-queue first (dissoc :factory))
-           {:label "myqueue" :type "activemq-queue" :queue "my-queue" :name "ActiveMQ Query API" :password "mypassword" :endpoint "tcp://my-active-mq-endpoint" :username "myusername"}))
+    (is (= (-> good-result :activemq-queue first (dissoc :connection))
+           {:label "myqueue" :type "activemq-queue" :queue "my-queue" :name "ActiveMQ Query API" :password "mypassword" :endpoint "tcp://my-active-mq-endpoint:61616" :username "myusername"}))
 
     (testing "parse-broadcast-config is able to parse a downstream configuration out of a configuration map"
       (is (nil? (downstream/parse-broadcast-config endpoint-missing)) "Missing endpoint key in one item should result in error.")
