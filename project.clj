@@ -1,4 +1,4 @@
-(defproject event-data-event-bus "0.1.14"
+(defproject event-data-event-bus "0.1.15"
   :description "Event Bus for Event Data"
   :url "http://eventdata.crossref.org/"
   :license {:name "MIT License"
@@ -32,7 +32,10 @@
                  [org.apache.logging.log4j/log4j-core "2.6.2"]
                  [org.slf4j/slf4j-simple "1.7.21"]
                  [clojurewerkz/quartzite "2.0.0"]
-                 [org.clojure/math.combinatorics "0.1.4"]]
+                 [org.clojure/math.combinatorics "0.1.4"]
+
+                 ;; https://mvnrepository.com/artifact/org.apache.activemq/activemq-client
+                 [org.apache.activemq/activemq-client "5.14.5"]]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
   :test-selectors {:default (constantly true)

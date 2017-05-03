@@ -17,7 +17,9 @@
             [clojure.string :as string]
             [config.core :refer [env]]
             [event-data-common.backoff :as backoff]
-            [org.httpkit.client :as client]))
+            [org.httpkit.client :as client]
+            [clojure.set :refer [superset?]])
+  (:import [javax.jms Session]))
 
 (def retries
   "Try to deliver this many times downstream."
@@ -30,8 +32,9 @@
 (defn parse-broadcast-config
   "Read a broadcast structure from a structure containing environment variables.
    Return {:live list-of-endpoints
-           :batch list-of-endpoints}
-   Endpoints are specified as {:label, :jwt, :endpoint, :name, :type}
+           :batch list-of-endpoints
+           :activemq-queue list-of-amq-connection-factories}
+   Endpoints are specified as {:label, :endpoint, :name, :type, :jwt (optional), :username (optional), :password (optional)}
    Return nil on error."
    [environment]
    (let [; all keys as strings (they're supplied as keywords).
@@ -42,7 +45,7 @@
          ; Those with the correct suffix.
          with-suffix (filter #(and (= (count %) 3)
                                     (= (first %) "broadcast")
-                                    (#{"jwt" "endpoint" "name" "type"} (nth % 2)))
+                                    (#{"jwt" "endpoint" "name" "type" "username" "password" "queue"} (nth % 2)))
                               splitten)
 
          ; Into groups by the label.
@@ -66,16 +69,31 @@
                              per-label-group)))
                            per-label-groups)
 
-         all-keys-present? (every? #(= (-> % keys set) #{:jwt :endpoint :name :type :label}) downstreams)
-         all-types-known? (every? #{"live" "batch"} (map :type downstreams))
-    
+         ; Those keys that are compulsory. :jwt, :username, :password aren't.
+         all-keys-present? (every? #(superset? (-> % keys set) #{:endpoint :name :type :label}) downstreams)
+         all-types-known? (every? #{"live" "batch" "activemq-queue"} (map :type downstreams))
+
+         ; Take any required actions based on type.
+         processed-types (map #(condp = (:type %)
+                                "live" %
+                                "batch" %
+                                "activemq-queue" (assoc %
+                                                   :factory (new org.apache.activemq.ActiveMQConnectionFactory
+                                                               (:username %)
+                                                               (:password %)
+                                                               (:endpoint %)))
+                                %)
+                             downstreams)
+
          ; Then we just want to group by the type (and turn the key into a keyword).
          ; Also return the list as a set because order isn't significant.
          type-groups (into {} (map (fn [[k v]] [(keyword k) (set v)])
-                                     (group-by :type downstreams)))
+                                     (group-by :type processed-types)))
+
+
 
          ; Default values for each, in case there are none of either.
-         result (merge {:live #{} :batch #{}} type-groups)]
+         result (merge {:live #{} :batch #{} :activemq-queue #{}} type-groups)]
 
     (when-not all-keys-present?
       (log/error "Failed to read config for downstream subscribers: Missing config keys."))
@@ -95,14 +113,38 @@
    
 (def downstream-config-cache (delay (load-broadcast-config)))
 
+(defn enqueue
+  [factory queue-name data-str]
+  (with-open [connection (.createConnection factory)]
+    (let [session (.createSession connection false, Session/AUTO_ACKNOWLEDGE)
+          destination (.createQueue session queue-name)
+          producer (.createProducer session destination)
+          message (.createTextMessage session data-str)]
+      (.send producer message))))
+
 (defn broadcast-live
   "Accept incoming event and broadcast to live downstream subscribers."
   [event-structure]
   ; Most of the heavy lifting is done by `backoff`.
-  (let [live-downstreams (:live (load-broadcast-config))
-        body-json (json/write-str event-structure)]
-    (log/debug "Recieve event for live broadcast:" (:id event-structure) "to" (count live-downstreams))
-    (doseq [downstream live-downstreams]
+  (let [body-json (json/write-str event-structure)]
+    (log/debug "Recieve event for live broadcast:" (:id event-structure) "to" (count @downstream-config-cache))
+    
+    ; Batch mode not yet required.
+
+    ; Send to queues.
+    (doseq [downstream (:activemq-queue @downstream-config-cache)]
+      (backoff/try-backoff
+        #(enqueue (:factory downstream) (:queue downstream) body-json)
+        retry-delay
+        retries
+        ; Only log info on retry because it'll be tried again.
+        #(log/info "Error enqueueing" (:id event-structure) "to downstream" (:label downstream) "with exception" (.getMessage %))
+        ; But if terminate is called, that's a serious problem.
+        #(log/error "Failed to send event" (:id event-structure) "to downstream" (:label downstream))
+        #(log/debug "Finished broadcasting" (:id event-structure) "to downstream" (:label downstream))))
+
+    ; Send to live broadcasts.
+    (doseq [downstream (:live @downstream-config-cache)]
       (backoff/try-backoff
         ; Exception thrown if not 200 or 201, also if some other exception is thrown during the client posting.
         #(let [response @(client/post (:endpoint downstream) {:headers {"authorization" (str "Bearer " (:jwt downstream))} :body body-json})]

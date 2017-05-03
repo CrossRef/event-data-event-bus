@@ -239,10 +239,10 @@ Note that during development and testing Docker Compose refers to the `.env` fil
 Downstream subscribers are also specified by environment variables. Each subscriber must supply the following options:
 
  - `JWT` a JWT token to be passed in a Authorization Bearer header, **if** type is `live` or `batch`
- - `USERNAME` and `PASSWORD` **if** the type is `activemq-topic`
+ - `USERNAME`, `PASSWORD` and `QUEUE` **if** the type is `activemq-queue`
  - `ENDPOINT` a full URL for the event to be sent to
  - `NAME` a descriptive name
- - `TYPE` one of `live` or `batch` or `activemq-topic`
+ - `TYPE` one of `live` or `batch` or `activemq-queue`
 
 The subscriber must also have a label to identify it. Each subscriber should supply the following environment variables:
 
