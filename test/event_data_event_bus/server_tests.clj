@@ -228,14 +228,14 @@
         yesterday-midnight (clj-time/minus today-midnight (clj-time/days 1))]
 
     (testing "Live Archive should reject badly formatted dates"
-      (is (= 400 (:status (@server/app (-> (mock/request :get "/events/live-archive/fifth-of-september-twenty-sixteen")
+      (is (= 400 (:status (@server/app (-> (mock/request :get "/events/archive/fifth-of-september-twenty-sixteen/xx")
                                 (mock/header "authorization" (str "Bearer " @matching-token))))))
           "Badly formatted date should be rejected as malformed."))
 
     (testing "Live Archive should reject dates after today"
       (clj-time/do-at today-midnight
         (let [tomorrow-str (clj-time-format/unparse date/yyyy-mm-dd-format tomorrow-midnight)]
-          (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" tomorrow-str))
+          (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/archive/" tomorrow-str "/aa"))
                                     (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Tomorrow's date should be forbidden."))))
 
@@ -245,12 +245,12 @@
             two-hours-later (clj-time/plus today-midnight (clj-time/hours 2))]
         
         (clj-time/do-at today-midnight
-          (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" yesterday-str))
+          (is (= 403 (:status (@server/app (-> (mock/request :get (str "/events/archive/" yesterday-str "/aa"))
                                                (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Yesterday's date should be forbidden for the first hour of the day."))
 
         (clj-time/do-at two-hours-later
-          (is (= 200 (:status (@server/app (-> (mock/request :get (str "/events/live-archive/" yesterday-str))
+          (is (= 200 (:status (@server/app (-> (mock/request :get (str "/events/archive/" yesterday-str "/aa"))
                                                (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Yesterday's date should be OK after the first hour of the day."))))))
 
@@ -312,7 +312,7 @@
 
     (testing "Events for specific day can be retrieved as live archive."
       (clj-time/do-at monday
-        (let [retrieved-archive-response (@server/app (-> (mock/request :get (str "/events/live-archive/2016-11-26"))
+        (let [retrieved-archive-response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-26/aa"))
                                                  (mock/header "authorization" (str "Bearer " @matching-token))))
               {retrieved-events "events" archive-date "archive-generated"} (json/read-str (:body retrieved-archive-response))]
 
@@ -332,25 +332,19 @@
 
     (testing "Empty archive returned when no data."
       (clj-time/do-at monday
-        (let [retrieved-archive (@server/app (-> (mock/request :get (str "/events/live-archive/1901-01-10"))
+        (let [retrieved-archive (@server/app (-> (mock/request :get (str "/events/archive/1901-01-10/aa"))
                                                  (mock/header "authorization" (str "Bearer " @matching-token))))
               {retrieved-events "events"} (json/read-str (:body retrieved-archive))]
           (is (empty? retrieved-events) "On a day when nothing happened the archive should be empty."))))))
 
-(deftest ^:component archive-should-report-missing
-  (testing "Archive should 404 all not-found dates items."
-      (clj-time/do-at (clj-time/date-time 1986 2 5)
-        ; TODO CHECK JSON
-        (is (= 404 (:status (@server/app (-> (mock/request :get (str "/events/archive/1986-02-05"))
-                                             (mock/header "authorization" (str "Bearer " @matching-token))))))
-              "Nonexistent archive item should be 404"))))
-
 (deftest ^:component archive-should-return-events
   (testing "Archive should contain archived events."
 
+    ; Insert some events. 
+    ; NB all events in the input file have the same prefix for ease of testing.
     (let [token (.sign @signer {"sub" "wikipedia"})
           friday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-25.json"))))]
-        ; Insert some events
+        
 
       (clj-time/do-at (clj-time/date-time 2016 11 25)
         (parallel-doseq friday-events (fn [event]
@@ -360,18 +354,9 @@
                                           (mock/body (json/write-str event)))))))
 
 
-      ; Next day. They should not be available in the archive yet.
-      (clj-time/do-at (clj-time/date-time 2016 1 27)
-        (is (= 404 (:status (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25"))
-                                                 (mock/header "authorization" (str "Bearer " @matching-token))))))
-              "When there's no data, archive should 404"))
-
-      ; Next day we trigger the archive.
-      (clj-time/do-at (clj-time/date-time 2016 1 28)
-        (archive/save-archive @server/storage "2016-11-25")
-
-        ; And then retrieve.
-        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25"))
+      ; Next day (at 5am) we retrieve from the archive.
+      (clj-time/do-at (clj-time/date-time 2016 11 28 5)
+        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
                                         (mock/header "authorization" (str "Bearer " @matching-token))))
 
               {events "events" archive-date "archive-generated"} (json/read-str (:body response))]
@@ -380,27 +365,11 @@
             (is (= 200 (:status response))
               "When the archive has been triggered, there should be events.")
 
-            (is (.startsWith archive-date "2016-01-28") "Archive date should be the date that the archive was generated")
+            (is (.startsWith archive-date "2016-11-28") "Archive date should be the date that the archive was generated")
 
             (is (not-empty events) "Response should contain events.")
 
-            (is (= (count events) (count friday-events)) "Right number of events should be returned.")))
-
-      ; Next re-trigger the archive for some reason.
-      (clj-time/do-at (clj-time/date-time 2016 1 29)
-        (archive/save-archive @server/storage "2016-11-25")
-
-        ; And then retrieve. Archive should have been re-built with new date.
-        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25"))
-                                        (mock/header "authorization" (str "Bearer " @matching-token))))
-
-              {events "events" archive-date "archive-generated"} (json/read-str (:body response))]
-
-            ; Now they should be available.
-            (is (= 200 (:status response))
-              "When the archive has been triggered, there should be events.")
-
-            (is (.startsWith archive-date "2016-01-29") "Archive date should be the date that the archive was generated"))))))
+            (is (= (count events) (count friday-events)) "Right number of events should be returned."))))))
 
 ; Other bits and pieces.
 
@@ -416,4 +385,3 @@
     (let [response (@server/app
                      (mock/request :get "/heartbeat"))]
       (is (= (get-in response [:status]) 200)))))
-

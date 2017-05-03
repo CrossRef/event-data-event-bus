@@ -23,7 +23,7 @@ services:
     build: .
     volumes:
      - .:/usr/src/app
-     - ./.m2-cache:/.m2
+     - ./.m2-cache:/root/.m2
     depends_on:
      - redis
      - ebcstatus
@@ -34,7 +34,7 @@ services:
      - JWT_SECRETS=TEST,TEST2
      - STORAGE=redis
      - PORT=8002
-     - STATUS_SERVICE=http://ebstatus:8003
+     - STATUS_SERVICE=http://ebcstatus:8003
      - BROADCAST-1-JWT=JWT-ONE
      - BROADCAST-1-ENDPOINT=http://endpoint1.com/endpoint
      - BROADCAST-1-NAME=Endpoint One

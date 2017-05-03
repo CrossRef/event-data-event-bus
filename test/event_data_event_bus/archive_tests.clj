@@ -42,7 +42,7 @@
       (doseq [event sunday-events]
         (archive/save-event @redis-store (event "id") "2016-11-27" (json/write-str event))))
 
-    ; (let [saturday-archive (archive/archive-for @redis-store "2016-11-26")
+    ; (let [saturday-archive (archive/archive-for @redis-store "2016-11-26/aa")
           ; saturday-archive-events (get saturday-archive "events")]
       ; (is (= (count saturday-events) (count saturday-archive-events)) "All events returned")
       ; (is (= (set (map #(% "id") saturday-events))

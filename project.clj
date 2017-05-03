@@ -31,7 +31,8 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [org.apache.logging.log4j/log4j-core "2.6.2"]
                  [org.slf4j/slf4j-simple "1.7.21"]
-                 [clojurewerkz/quartzite "2.0.0"]]
+                 [clojurewerkz/quartzite "2.0.0"]
+                 [org.clojure/math.combinatorics "0.1.4"]]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
   :test-selectors {:default (constantly true)

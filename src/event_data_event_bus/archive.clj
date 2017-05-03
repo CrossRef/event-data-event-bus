@@ -15,7 +15,8 @@
             [clojurewerkz.quartzite.schedule.calendar-interval :as cal]
             [clojurewerkz.quartzite.jobs :refer [defjob]]
             [clojurewerkz.quartzite.scheduler :as qs]
-            [clojurewerkz.quartzite.schedule.cron :as qc]))
+            [clojurewerkz.quartzite.schedule.cron :as qc]
+            [clojure.math.combinatorics :as combinatorics]))
 
 (def date-format
   (:date-time-no-ms clj-time-format/formatters))
@@ -33,11 +34,23 @@
   "Prefix under which per-day archives are stored."
   "a/")
 
+; Standard length is 2 for pre-emptive generation of archive, but more can be requested.
+(def standard-prefix-length 2)
+(def hexadecimal [\0 \1 \2 \3 \4 \5 \6 \7 \8 \9 \a \b \c \d \e \f])
+
+(defn event-prefixes-length
+  [length]
+  (map #(apply str %) (combinatorics/selections hexadecimal length)))
+
 (defn archive-for
-  "Generate archive for given YYYY-MM-DD date string prefix."
-  [storage date-str]
-  (let [; All events we're looking for will have been stored with the `day-prefix` and the YYYY-MM-DD prefix.
-        date-keys (store/keys-matching-prefix storage (str day-prefix date-str))
+  "Generate archive for given YYYY-MM-DD date string prefix plus the event ID prefix."
+  [storage date-str event-id-prefix]
+  (let [; We are filtering the day index by the prefix which includes part of the event ID.
+        ; We will then remove the date part of the prefix to find the event IDs.
+        full-prefix (str day-prefix date-str "/" event-id-prefix)
+
+        ; All events we're looking for will have been stored with the `day-prefix` and the YYYY-MM-DD prefix.
+        date-keys (store/keys-matching-prefix storage full-prefix)
 
         ; We get back a key with the day-prefix. The actual data is stored in the event-prefix.
         ; i.e. "d/YYYY-MM-DD/1234" -> "e/1234"
@@ -59,24 +72,29 @@
         timestamp (clj-time-format/unparse date-format (clj-time/now))]
     (log/info "Archive for" date-str "got" num-keys "keys and" (count event-blobs) "events")
     {"archive-generated" timestamp
+     "date" date-str
+     "prefix" event-id-prefix
      "events" all-events}))
 
-(defn save-archive
-  "Save or update archive in storage."
-  [storage date-str]
-  (let [archive (archive-for storage date-str)]
-    (store/set-string storage (str archive-prefix date-str) (json/write-str archive))))
+(defn get-or-generate-archive
+  "Generate the archive or retrieve and save it."
+  [storage date-str event-id-prefix]
+  (log/info "Get or generate archive for" date-str "/" event-id-prefix)
+  (let [storage-key (str archive-prefix date-str "/" event-id-prefix)
+        ; Get the ready made archive file...
+        retrieved (store/get-string storage storage-key)
+        ; Or re-generate it.
+        generated (when-not retrieved (archive-for storage date-str event-id-prefix))]
 
-(defn save-archive-if-not-exists
-  [storage date]
-  (let [date-str (clj-time-format/unparse date/yyyy-mm-dd-format date)
-        filename (str archive-prefix date-str)
-        exists? (= (store/keys-matching-prefix storage filename) [filename])]
-    (log/info "Build archive, if missing, for" filename)
-    (if exists?
-      (log/info "Exists, skipping" filename)
-      (save-archive storage date-str)))
-  (log/info "Done archive"))
+    ; If we had to generate it, save for next time.
+    (when generated
+      (store/set-string storage (str archive-prefix date-str "/" event-id-prefix) (json/write-str generated)))
+
+    (if retrieved
+      (log/info "Retrieved pre-built archive for" date-str "/" event-id-prefix "from" storage-key)
+      (log/info "Generated archive for" date-str "/" event-id-prefix "at" storage-key))
+
+    (or retrieved generated)))
 
 (defn storage-path-for-event [event-id]
   (str event-prefix event-id))
@@ -100,10 +118,13 @@
 (defjob yesterday-archive-job
   [ctx]
   (log/info "Starting yesterday's archive...")
-  (save-archive-if-not-exists
-    @storage
-    (clj-time/minus (clj-time/now) (clj-time/days 1)))
-  (log/info "Saved yesterday's archive."))
+  (doseq [event-id-prefix (event-prefixes-length standard-prefix-length)]
+    (log/info "Saving yesterday's archive for prefix" event-id-prefix)
+    (get-or-generate-archive
+      @storage
+      (clj-time-format/unparse date/yyyy-mm-dd-format (clj-time/minus (clj-time/now) (clj-time/days 1)))
+      event-id-prefix))
+    (log/info "Saved yesterday's archive."))
 
 (defn run-archive-schedule
   "Start schedule to generate daily archive. Block."
@@ -127,6 +148,7 @@
         date-range (take-while #(clj-time/before? % end-date)
                      (clj-time-periodic/periodic-seq start-date (clj-time/days 1)))]
     (doseq [date date-range]
-      (log/info "Check" date)
-      (save-archive-if-not-exists @storage date))
+      (doseq [event-id-prefix (event-prefixes-length standard-prefix-length)]
+        (log/info "Check" date "prefix" event-id-prefix)
+          (get-or-generate-archive @storage (clj-time-format/unparse date/yyyy-mm-dd-format date) event-id-prefix)))
     (log/info "Done checking dates")))
