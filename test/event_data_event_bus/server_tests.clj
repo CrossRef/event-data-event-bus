@@ -371,6 +371,84 @@
 
             (is (= (count events) (count friday-events)) "Right number of events should be returned."))))))
 
+(deftest ^:component update-events-roundtrip
+  (testing "Should be able to push, retrieve in archive, update, then get new archive."
+
+    ; Insert some events. 
+    ; NB all events in the input file have the same prefix for ease of testing.
+    (let [token (.sign @signer {"sub" "wikipedia"})
+          ; An Event we send.
+          original-event {
+            :total 1
+            :source_token "36c35e23-8757-4a9d-aacf-345e9b7eb50d"
+            :obj {},
+            :id "aad96887-7ab9-43b7-a425-c9058c9e8e20"
+            :message_action "create"
+            :message_type "relation"
+            :subj_id "https://species.wikimedia.org/wiki/Pristimantis_colomai"
+            :state "done"
+            :subj {
+              :pid "https://species.wikimedia.org/wiki/Pristimantis_colomai"
+              :title "Pristimantis colomai"
+              :issued "2016-11-25T23:41:09.000Z"
+              :URL "https://species.wikimedia.org/wiki/Pristimantis_colomai"
+              :type "entry-encyclopedia"}
+            :source_id "wikipedia"
+            :relation_type_id "references"
+            :obj_id "https://doi.org/10.11646/zootaxa.4193.3.9"
+            :occurred_at "2016-11-25T23:41:09Z"}
+
+         ; And the update we're going to send after.
+         updated-event (assoc original-event :updated "deleted" :updated_reason "http://example.com/alternative-facts" :updated_date "2017-01-01")]
+
+      (clj-time/do-at (clj-time/date-time 2016 11 25)
+        (@server/app (->
+          (mock/request :post "/events")
+          (mock/header "authorization" (str "Bearer " token))
+          (mock/body (json/write-str original-event)))))
+
+
+      ; Next day (at 5am) we retrieve from the archive.
+      (clj-time/do-at (clj-time/date-time 2016 11 28 5)
+        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
+                                        (mock/header "authorization" (str "Bearer " @matching-token))))
+
+              event (-> response :body (json/read-str :key-fn keyword) :events first)]
+
+          (is (= original-event (dissoc event :timestamp)) "Event should be retrieved from archive (less timestamp which is added)")))
+
+      (clj-time/do-at (clj-time/date-time 2016 11 30)
+        ; Then we update that Event.
+        (let [update-response (@server/app (->
+                                (mock/request :put "/events/aad96887-7ab9-43b7-a425-c9058c9e8e20")
+                                (mock/header "authorization" (str "Bearer " token))
+                                (mock/body (json/write-str updated-event))))]
+          (is (= 201 (:status update-response)) "Event should be accepted with Created."))
+
+        ; Also update a non-existent Event.
+        (let [update-response (@server/app (->
+                                (mock/request :put "/events/aad96887-7ab9-43b7-a425-XXXXX")
+                                (mock/header "authorization" (str "Bearer " token))
+                                (mock/body (json/write-str updated-event))))]
+          (is (= 403 (:status update-response)) "Non-existent Event should not be accepted."))
+
+        ; Also try to update the Event without authorization.
+        (let [update-response (@server/app (->
+                                (mock/request :put "/events/aad96887-7ab9-43b7-a425-XXXXX")
+                                (mock/header "authorization" (str "Bearer " "BAD TOKEN"))
+                                (mock/body (json/write-str updated-event))))]
+          (is (= 403 (:status update-response)) "Bad auth token should not be accepted."))
+
+        ; Now try and get the archive. It should have been deleted and re-created
+        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
+                                        (mock/header "authorization" (str "Bearer " @matching-token))))
+
+              event (-> response :body (json/read-str :key-fn keyword) :events first)]
+
+          (is (= updated-event (dissoc event :timestamp)) "Updated Event should be present in new Archive.")
+          (is (not= event (dissoc event :timestamp)) "Updated Event is different to original Event."))))))
+
+
 ; Other bits and pieces.
 
 (deftest ^:component home-redirects

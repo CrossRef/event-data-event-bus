@@ -3,7 +3,7 @@
             [clojure.tools.logging :as l])
   (:require [org.httpkit.server :as server]
             [config.core :refer [env]]
-            [compojure.core :refer [defroutes GET POST]]
+            [compojure.core :refer [defroutes GET POST PUT]]
             [ring.util.response :as ring-response]
             [ring.middleware.params :as middleware-params]
             [ring.middleware.content-type :as middleware-content-type]
@@ -180,6 +180,46 @@
       ; And save.
       (archive/save-event @storage (::event-id ctx) (::yyyy-mm-dd ctx) json))))
 
+(defresource update-event
+  [id]
+  :allowed-methods [:put]
+  :available-media-types ["application/json"]
+
+  :malformed? (fn [ctx]
+                (let [payload (try (-> ctx :request :body reader (json/read :key-fn keyword)) (catch Exception _ nil))
+                      schema-errors (schema/validation-errors payload)]
+                  [schema-errors {::payload payload ::schema-errors schema-errors}]))
+
+  :allowed? (fn [ctx]
+              (let [event-str (store/get-string @storage (str archive/event-prefix id))
+                    event-exists? (not (nil? event-str))
+                    old-event (when event-exists? (json/read-str event-str :key-fn keyword))
+
+                    ; The update can only happen if the sender has a valid claim for the source_id.
+                    source-id-ok (= (:source_id old-event)
+                                    (get-in ctx [:request :jwt-claims "sub"]))
+
+                    merged-event (assoc (::payload ctx) :timestamp (:timestamp old-event))]
+
+                [(and event-exists? source-id-ok) {::new-event merged-event}]))
+
+    :put! (fn [ctx]
+                  (status/add! "event-bus" "event" "updated" 1)
+                  (let [new-event (::new-event ctx)
+                        json (json/write-str new-event)
+                        date-str (.substring (:timestamp new-event) 0 10)]
+                    (status/add! "event-bus" "event-updated-by-source" (-> ctx ::payload :source_id) 1)
+
+                    ; Send to all subscribers.
+                    (future
+                      (downstream/broadcast-live new-event ctx))
+
+                    ; And save.
+                    (archive/save-event @storage (:id new-event) date-str json)
+
+                    ; And remove the archive that contains this Event.
+                    (archive/invalidate-archive-for-event-id @storage (:id new-event) date-str))))
+
 (defresource event
   [id]
   :allowed-methods [:get]
@@ -224,6 +264,7 @@
   (POST "/events" [] (events))
   (GET "/events/archive/:date/:prefix" [date prefix] (events-archive date prefix))
   (GET "/events/:id" [id] (event id))
+  (PUT "/events/:id" [id] (update-event id))
   (GET "/heartbeat" [] (heartbeat))
   (GET "/auth-test" [] (auth-test)))
 

@@ -112,6 +112,13 @@
     ; Also store the key for the per-day index. We only use the presence of the key. 
     (store/set-string storage event-date-storage-key "")))
 
+(defn invalidate-archive-for-event-id
+  "Invalidate the cached archive(s) that contain the given Event ID."
+  [storage event-id date-str]
+    (let [storage-key (str archive-prefix date-str "/" (.substring event-id 0 standard-prefix-length))]
+      (log/info "Invalidate archive with key" storage-key)
+      (store/delete storage storage-key)))
+
 (def storage
   (delay (s3/build (:s3-key env) (:s3-secret env) (:s3-region-name env) (:s3-bucket-name env))))
 
