@@ -49,17 +49,21 @@
         invalid-type (assoc good-config-map :broadcast-1-type "platypus")
         good-result (downstream/parse-broadcast-config good-config-map)]
 
-    (is (= (dissoc good-result :activemq-queue)
+    (is (= good-result
             {:live
               (set [{:label "1" :type "live" :jwt "JWT_ONE" :endpoint "http://one.com/endpoint" :name "Endpoint Number One"}
                     {:label "3" :type "live" :jwt "JWT_THREE" :endpoint "http://three.com/endpoint" :name "Endpoint Number Three"}])
              :batch
               (set [{:label "2" :type "batch" :jwt "JWT_TWO" :endpoint "http://two.com/endpoint" :name "Endpoint Number Two"}
-                    {:label "datacite" :type "batch" :jwt "JWT_FOR_DATACITE" :endpoint "http://datcite.org/endpoint" :name "Endpoint for DataCite"}])}))
+                    {:label "datacite" :type "batch" :jwt "JWT_FOR_DATACITE" :endpoint "http://datcite.org/endpoint" :name "Endpoint for DataCite"}])
 
-    ; Factory doesn't implement equality. That's probably a good thing.
-    (is (= (-> good-result :activemq-queue first (dissoc :connection))
-           {:label "myqueue" :type "activemq-queue" :queue "my-queue" :name "ActiveMQ Query API" :password "mypassword" :endpoint "tcp://my-active-mq-endpoint:61616" :username "myusername"}))
+             :activemq-queue
+              (set [{:label "myqueue" :type "activemq-queue" :queue "my-queue" :name "ActiveMQ Query API"
+                     :password "mypassword" :endpoint "tcp://my-active-mq-endpoint:61616" :username "myusername"
+                     :queue-config {:username "myusername"
+                                    :password "mypassword"
+                                    :queue-name "my-queue"
+                                    :url "tcp://my-active-mq-endpoint:61616"}}])}))
 
     (testing "parse-broadcast-config is able to parse a downstream configuration out of a configuration map"
       (is (nil? (downstream/parse-broadcast-config endpoint-missing)) "Missing endpoint key in one item should result in error.")
@@ -80,7 +84,7 @@
   (testing "All incoming events should be sent to all listeners, even unreliable ones."
     ; Pre-check that we got what we expected.
     (is (= {:live #{{:label "1", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE", :type "live"}
-                    {:label "2", :type "live", :name "Endpoint Two", :jwt "JWT-TWO", :endpoint "http://endpoint2.com/endpoint"}},
+                    {:label "2", :type "live", :name "Endpoint Two", :jwt "JWT-TWO", :endpoint "http://endpoint2.com/endpoint"}}
             :batch #{}
             :activemq-queue #{}}
            (downstream/load-broadcast-config)) "Correct structure should be retrieved ")

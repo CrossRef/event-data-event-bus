@@ -17,6 +17,7 @@
             [clojure.string :as string]
             [config.core :refer [env]]
             [event-data-common.backoff :as backoff]
+            [event-data-common.queue :as queue]
             [org.httpkit.client :as client]
             [clojure.set :refer [superset?]])
   (:import [javax.jms Session]))
@@ -78,16 +79,11 @@
                                 "live" %
                                 "batch" %
                                 "activemq-queue" (assoc %
-                                                    :connection (future
-                                                                  (let [factory (new org.apache.activemq.ActiveMQConnectionFactory
-                                                                                  (:username %)
-                                                                                  (:password %)
-                                                                                  (:endpoint %))
-                                                                        connection (.createConnection factory)
-                                                                        session (.createSession connection false, Session/AUTO_ACKNOWLEDGE)
-                                                                        destination (.createQueue session (:queue %))
-                                                                        producer (.createProducer session destination)]
-                                                                    {:factory factory :producer producer :session session})))
+                                                    ; Construct parameters in a way that event-data-common.queue expects.
+                                                    :queue-config {:username (:username %)
+                                                                   :password (:password %)
+                                                                   :queue-name (:queue %)
+                                                                   :url (:endpoint %)})
                                 %)
                              downstreams)
 
@@ -119,11 +115,6 @@
    
 (def downstream-config-cache (delay (load-broadcast-config)))
 
-(defn enqueue
-  [session producer queue-name data-str]
-  (let [message (.createTextMessage session data-str)]
-      (.send producer message)))
-
 (defn broadcast-live
   "Accept incoming event and broadcast to live downstream subscribers."
   [event-structure]
@@ -136,7 +127,7 @@
     ; Send to queues.
     (doseq [downstream (:activemq-queue @downstream-config-cache)]
       (backoff/try-backoff
-        #(enqueue (-> downstream :connection deref :session) (-> downstream :connection deref :producer) (:queue downstream) body-json)
+        #(queue/enqueue event-structure (:queue-config downstream))
         retry-delay
         retries
         ; Only log info on retry because it'll be tried again.
