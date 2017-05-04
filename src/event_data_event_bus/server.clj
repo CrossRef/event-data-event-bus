@@ -37,8 +37,7 @@
   (*
     1000 ; 1 seconds
     60 ; 1 minute
-    60 ; 1 hour
-    24 ; 1 day
+    10 ; 10 minutes
 ))
 
 (def redis-prefix
