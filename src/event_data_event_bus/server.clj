@@ -211,7 +211,7 @@
 
                     ; Send to all subscribers.
                     (future
-                      (downstream/broadcast-live new-event ctx))
+                      (downstream/broadcast-live new-event))
 
                     ; And save.
                     (archive/save-event @storage (:id new-event) date-str json)
