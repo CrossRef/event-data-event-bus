@@ -46,7 +46,7 @@
          ; Those with the correct suffix.
          with-suffix (filter #(and (= (count %) 3)
                                     (= (first %) "broadcast")
-                                    (#{"jwt" "endpoint" "name" "type" "username" "password" "queue"} (nth % 2)))
+                                    (#{"jwt" "endpoint" "name" "type" "username" "password" "queue" "topic"} (nth % 2)))
                               splitten)
 
          ; Into groups by the label.
@@ -72,7 +72,7 @@
 
          ; Those keys that are compulsory. :jwt, :username, :password aren't.
          all-keys-present? (every? #(superset? (-> % keys set) #{:endpoint :name :type :label}) downstreams)
-         all-types-known? (every? #{"live" "batch" "activemq-queue"} (map :type downstreams))
+         all-types-known? (every? #{"live" "batch" "activemq-queue" "activemq-topic"} (map :type downstreams))
 
          ; Take any required actions based on type.
          processed-types (map #(condp = (:type %)
@@ -83,6 +83,12 @@
                                                     :queue-config {:username (:username %)
                                                                    :password (:password %)
                                                                    :queue-name (:queue %)
+                                                                   :url (:endpoint %)})
+                                "activemq-topic" (assoc %
+                                                    ; Construct parameters in a way that event-data-common.queue expects.
+                                                    :queue-config {:username (:username %)
+                                                                   :password (:password %)
+                                                                   :topic-name (:topic %)
                                                                    :url (:endpoint %)})
                                 %)
                              downstreams)

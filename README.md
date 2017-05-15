@@ -240,9 +240,10 @@ Downstream subscribers are also specified by environment variables. Each subscri
 
  - `JWT` a JWT token to be passed in a Authorization Bearer header, **if** type is `live` or `batch`
  - `USERNAME`, `PASSWORD` and `QUEUE` **if** the type is `activemq-queue`
+ - `USERNAME`, `PASSWORD` and `TOPIC` **if** the type is `activemq-topic`
  - `ENDPOINT` a full URL for the event to be sent to
  - `NAME` a descriptive name
- - `TYPE` one of `live` or `batch` or `activemq-queue`
+ - `TYPE` one of `live`, `batch`, `activemq-queue` or `activemq-topic`.
 
 The subscriber must also have a label to identify it. Each subscriber should supply the following environment variables:
 
