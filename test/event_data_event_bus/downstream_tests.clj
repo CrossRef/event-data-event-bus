@@ -35,8 +35,15 @@
    :broadcast-myqueue-password "mypassword"
    :broadcast-myqueue-endpoint "tcp://my-active-mq-endpoint:61616"
    :broadcast-myqueue-queue "my-queue"
-   :broadcast-myqueue-name "ActiveMQ Query API"
+   :broadcast-myqueue-name "ActiveMQ Query API Queue"
    :broadcast-myqueue-type "activemq-queue"
+
+   :broadcast-mytopic-username "myusername"
+   :broadcast-mytopic-password "mypassword"
+   :broadcast-mytopic-endpoint "tcp://my-active-mq-endpoint:61616"
+   :broadcast-mytopic-topic "my-topic"
+   :broadcast-mytopic-name "ActiveMQ Query API Topic"
+   :broadcast-mytopic-type "activemq-topic"
 
    :completely-irrelevant "don't look"
    :other-config-keys "turn away"
@@ -58,11 +65,19 @@
                     {:label "datacite" :type "batch" :jwt "JWT_FOR_DATACITE" :endpoint "http://datcite.org/endpoint" :name "Endpoint for DataCite"}])
 
              :activemq-queue
-              (set [{:label "myqueue" :type "activemq-queue" :queue "my-queue" :name "ActiveMQ Query API"
+              (set [{:label "myqueue" :type "activemq-queue" :queue "my-queue" :name "ActiveMQ Query API Queue"
                      :password "mypassword" :endpoint "tcp://my-active-mq-endpoint:61616" :username "myusername"
                      :queue-config {:username "myusername"
                                     :password "mypassword"
                                     :queue-name "my-queue"
+                                    :url "tcp://my-active-mq-endpoint:61616"}}])
+
+              :activemq-topic
+              (set [{:label "mytopic" :type "activemq-topic" :topic "my-topic" :name "ActiveMQ Query API Topic"
+                     :password "mypassword" :endpoint "tcp://my-active-mq-endpoint:61616" :username "myusername"
+                     :queue-config {:username "myusername"
+                                    :password "mypassword"
+                                    :topic-name "my-topic"
                                     :url "tcp://my-active-mq-endpoint:61616"}}])}))
 
     (testing "parse-broadcast-config is able to parse a downstream configuration out of a configuration map"
