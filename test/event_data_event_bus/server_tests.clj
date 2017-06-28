@@ -13,7 +13,8 @@
             [clj-time.core :as clj-time]
             [clj-time.format :as clj-time-format]
             [clojure.java.io :as io]
-            [org.httpkit.fake :as fake])
+            [org.httpkit.fake :as fake]
+            [config.core :refer [env]])
   (:import [com.auth0.jwt JWTSigner JWTVerifier]))
 
 (def signer
@@ -49,14 +50,14 @@
   (doseq [k (store/keys-matching-prefix @server/storage "")]
     (store/delete @server/storage k))
 
-  ; Clear all keys from Redis.
-  (doseq [k (store/keys-matching-prefix @server/redis-store "")]
-    (store/delete @server/redis-store k))
+  ; Clear all keys from Redis when we're using it (i.e. not unit tests).
+  (when (:bus-redis-host env)
+    (doseq [k (store/keys-matching-prefix @server/redis-store "")]
+      (store/delete @server/redis-store k)))
  
   ; For these tests we want to eat the downstream broadcasts and status updates.
   (fake/with-fake-http ["http://endpoint1.com/endpoint" {:status 201}
-                        "http://endpoint2.com/endpoint" {:status 201}
-                        #"http://ebstatus:8003/.*" {:status 201}]
+                        "http://endpoint2.com/endpoint" {:status 201}]
     (f)))
 
 (use-fixtures :each clear-storage-fixture)
@@ -77,38 +78,40 @@
 
 (deftest ^:component should-accept-good-events
   (testing "Submitted events with correctly signed JWT that matches the `subj` of the `source_id` should be accepted."
-    (let [event  {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
-                  "occurred_at" "2016-09-25T23:58:58Z"
-                  "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-                  "total" 1
-                  "id" "EVENT-ID-1"
-                  "subj" {
-                    "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-                    "title" "Señalización paracrina"
-                    "issued" "2016-09-25T23:58:58.000Z"
-                    "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-                    "type" "entry-encyclopedia"}
-                  "message_action" "create"
-                  "source_id" source-id
-                  "relation_type_id" "references"}
-        
-          token (.sign @signer {"sub" source-id})
-          request (->
-              (mock/request :post "/events")
-              (mock/header "authorization" (str "Bearer " @matching-token))
-              (mock/body (json/write-str event)))
-          response (@server/app request)
+    ; Don't broadcast.
+    (with-redefs [event-data-event-bus.server/broadcast-live-async (fn [_])]
+      (let [event  {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
+                    "occurred_at" "2016-09-25T23:58:58Z"
+                    "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                    "total" 1
+                    "id" "EVENT-ID-1"
+                    "subj" {
+                      "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "title" "Señalización paracrina"
+                      "issued" "2016-09-25T23:58:58.000Z"
+                      "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "type" "entry-encyclopedia"}
+                    "message_action" "create"
+                    "source_id" source-id
+                    "relation_type_id" "references"}
+          
+            token (.sign @signer {"sub" source-id})
+            request (->
+                (mock/request :post "/events")
+                (mock/header "authorization" (str "Bearer " @matching-token))
+                (mock/body (json/write-str event)))
+            response (@server/app request)
 
-          ; After we sent it, try and look it up on the API.
-          get-event-response (->
-                               (mock/request :get "/events/EVENT-ID-1")
-                               (mock/header "authorization" (str "Bearer " @matching-token))
-                               (@server/app))]
+            ; After we sent it, try and look it up on the API.
+            get-event-response (->
+                                 (mock/request :get "/events/EVENT-ID-1")
+                                 (mock/header "authorization" (str "Bearer " @matching-token))
+                                 (@server/app))]
 
-      (is (= 201 (:status response)) "Should be created OK.")
-      ; The returned event will have added field(s) e.g. timestamp, so won't be identical. Should be a proper superset though.
-      (is (clojure.set/subset? (set event)
-                               (set (json/read-str (:body get-event-response))))) "Same event should be retrievable afterwards.")))
+        (is (= 201 (:status response)) "Should be created OK.")
+        ; The returned event will have added field(s) e.g. timestamp, so won't be identical. Should be a proper superset though.
+        (is (clojure.set/subset? (set event)
+                                 (set (json/read-str (:body get-event-response))))) "Same event should be retrievable afterwards."))))
 
 (deftest ^:component should-reject-events-not-matching-token
   (testing "Submitted events with correctly signed JWT but non-matching `subj` of the `source_id` should be rejected."
@@ -188,34 +191,35 @@
 
 
 (deftest ^:component should-reject-duplicate-events
-  (let [event (json/write-str
-                {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
-                  "occurred_at" "2016-09-25T23:58:58Z"
-                  "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-                  "total" 1
-                  "id" "EVENT-ID-4"
-                  "subj" {
-                    "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-                    "title" "Señalización paracrina"
-                    "issued" "2016-09-25T23:58:58.000Z"
-                    "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
-                    "type" "entry-encyclopedia"}
-                  "message_action" "create"
-                  "source_id" source-id
-                  "relation_type_id" "references"})
-        token (.sign @signer {"sub" source-id})
+  (with-redefs [event-data-event-bus.server/broadcast-live-async (fn [_])]
+    (let [event (json/write-str
+                  {"obj_id" "https://doi.org/10.1093/EMBOJ/20.15.4132"
+                    "occurred_at" "2016-09-25T23:58:58Z"
+                    "subj_id" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                    "total" 1
+                    "id" "EVENT-ID-4"
+                    "subj" {
+                      "pid" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "title" "Señalización paracrina"
+                      "issued" "2016-09-25T23:58:58.000Z"
+                      "URL" "https://es.wikipedia.org/wiki/Se%C3%B1alizaci%C3%B3n_paracrina"
+                      "type" "entry-encyclopedia"}
+                    "message_action" "create"
+                    "source_id" source-id
+                    "relation_type_id" "references"})
+          token (.sign @signer {"sub" source-id})
 
-        ; Send the same thing twice.
-        first-response (@server/app (-> (mock/request :post "/events")
-                                       (mock/header "authorization" (str "Bearer " @matching-token))
-                                       (mock/body event)))
+          ; Send the same thing twice.
+          first-response (@server/app (-> (mock/request :post "/events")
+                                         (mock/header "authorization" (str "Bearer " @matching-token))
+                                         (mock/body event)))
 
-        second-response (@server/app (-> (mock/request :post "/events")
-                                       (mock/header "authorization" (str "Bearer " @matching-token))
-                                       (mock/body event)))]
+          second-response (@server/app (-> (mock/request :post "/events")
+                                         (mock/header "authorization" (str "Bearer " @matching-token))
+                                         (mock/body event)))]
 
-      (is (= 201 (:status first-response)) "Should be created OK.")
-      (is (= 403 (:status second-response)) "Duplicate should be rejected.")))
+        (is (= 201 (:status first-response)) "Should be created OK.")
+        (is (= 403 (:status second-response)) "Duplicate should be rejected."))))
 
 (deftest ^:component should-assign-timestamps
   ; TODO
@@ -254,61 +258,57 @@
                                                (mock/header "authorization" (str "Bearer " @matching-token))))))
               "Yesterday's date should be OK after the first hour of the day."))))))
 
-(defn parallel-doseq
-  "Apply f to every element of coll as quickly as possible in as many threads as possible."
-  [coll f]
-  (let [futures (map #(future (f %)) coll)]
-    (doseq [futur futures]
-      (deref futur))))
-
 ; Generation and consumption of live archive and archive.
 
 (deftest ^:component should-archive-events
-  (let [friday (clj-time/date-time 2016 11 25)
-        saturday (clj-time/date-time 2016 11 26)
-        sunday (clj-time/date-time 2016 11 27)
-        monday (clj-time/date-time 2016 11 28)
+  ; Don't broadcast.
+  (with-redefs [event-data-event-bus.server/broadcast-live-async (fn [_])]
 
-        token (.sign @signer {"sub" "wikipedia"})
+    (let [friday (clj-time/date-time 2016 11 25)
+          saturday (clj-time/date-time 2016 11 26)
+          sunday (clj-time/date-time 2016 11 27)
+          monday (clj-time/date-time 2016 11 28)
 
-        ; just north of 3,000 events, a day's worth of Wikipedia.
-        friday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-25.json"))))
-        saturday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-26.json"))))
-        sunday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-27.json"))))]
+          token (.sign @signer {"sub" "wikipedia"})
 
-    (testing "Pre-verification, event IDs from different days are all different."
-      (let [friday-ids (set (map #(get %"id") friday-events))
-            saturday-ids (set (map #(get %"id") saturday-events))
-            sunday-ids (set (map #(get %"id") sunday-events))]
+          ; just north of 3,000 events, a day's worth of Wikipedia.
+          friday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-25.json"))))
+          saturday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-26.json"))))
+          sunday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-27.json"))))]
 
-        (is (empty? (clojure.set/intersection friday-ids saturday-ids)))
-        (is (empty? (clojure.set/intersection saturday-ids sunday-ids)))
-        (is (empty? (clojure.set/intersection friday-ids sunday-ids)))))
+      (testing "Pre-verification, event IDs from different days are all different."
+        (let [friday-ids (set (map #(get %"id") friday-events))
+              saturday-ids (set (map #(get %"id") saturday-events))
+              sunday-ids (set (map #(get %"id") sunday-events))]
 
-    ; A busy weekend of events.
-  (l/info "Insert Friday")
+          (is (empty? (clojure.set/intersection friday-ids saturday-ids)))
+          (is (empty? (clojure.set/intersection saturday-ids sunday-ids)))
+          (is (empty? (clojure.set/intersection friday-ids sunday-ids)))))
+
+      ; A busy weekend of events.
+    (l/info "Insert Friday")
     (clj-time/do-at friday
-      (parallel-doseq friday-events (fn [event]
-                                      (@server/app (->
-                                        (mock/request :post "/events")
-                                        (mock/header "authorization" (str "Bearer " token))
-                                        (mock/body (json/write-str event)))))))
+      (doseq [event friday-events]
+        (@server/app (->
+          (mock/request :post "/events")
+          (mock/header "authorization" (str "Bearer " token))
+          (mock/body (json/write-str event))))))
 
     (l/info "Insert Saturday")
     (clj-time/do-at saturday
-      (parallel-doseq saturday-events (fn [event]
-                                        (@server/app (->
-                                          (mock/request :post "/events")
-                                          (mock/header "authorization" (str "Bearer " token))
-                                          (mock/body (json/write-str event)))))))
+      (doseq [event saturday-events]
+        (@server/app (->
+          (mock/request :post "/events")
+          (mock/header "authorization" (str "Bearer " token))
+          (mock/body (json/write-str event))))))
 
     (l/info "Insert Sunday")
     (clj-time/do-at sunday
-      (parallel-doseq sunday-events (fn [event]
-                                      (@server/app (->
-                                        (mock/request :post "/events")
-                                        (mock/header "authorization" (str "Bearer " token))
-                                        (mock/body (json/write-str event)))))))
+      (doseq [event sunday-events]
+        (@server/app (->
+          (mock/request :post "/events")
+          (mock/header "authorization" (str "Bearer " token))
+          (mock/body (json/write-str event))))))
 
     (testing "Events for specific day can be retrieved as live archive."
       (clj-time/do-at monday
@@ -335,118 +335,127 @@
         (let [retrieved-archive (@server/app (-> (mock/request :get (str "/events/archive/1901-01-10/aa"))
                                                  (mock/header "authorization" (str "Bearer " @matching-token))))
               {retrieved-events "events"} (json/read-str (:body retrieved-archive))]
-          (is (empty? retrieved-events) "On a day when nothing happened the archive should be empty."))))))
+          (is (empty? retrieved-events) "On a day when nothing happened the archive should be empty.")))))))
 
 (deftest ^:component archive-should-return-events
   (testing "Archive should contain archived events."
+    ; Don't broadcast.
+    (with-redefs [event-data-event-bus.server/broadcast-live-async (fn [_])]
 
-    ; Insert some events. 
-    ; NB all events in the input file have the same prefix for ease of testing.
-    (let [token (.sign @signer {"sub" "wikipedia"})
-          friday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-25.json"))))]
-        
+      ; Insert some events. 
+      ; NB all events in the input file have the same prefix for ease of testing.
+      (let [token (.sign @signer {"sub" "wikipedia"})
+            friday-events (json/read (io/reader (io/file (io/resource "test/wiki-2016-11-25.json"))))]
+          
 
-      (clj-time/do-at (clj-time/date-time 2016 11 25)
-        (parallel-doseq friday-events (fn [event]
-                                        (@server/app (->
-                                          (mock/request :post "/events")
-                                          (mock/header "authorization" (str "Bearer " token))
-                                          (mock/body (json/write-str event)))))))
+        (clj-time/do-at (clj-time/date-time 2016 11 25)
+          (doseq [event friday-events]
+            (@server/app (->
+              (mock/request :post "/events")
+              (mock/header "authorization" (str "Bearer " token))
+                                  (mock/body (json/write-str event))))))
 
 
-      ; Next day (at 5am) we retrieve from the archive.
-      (clj-time/do-at (clj-time/date-time 2016 11 28 5)
-        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
-                                        (mock/header "authorization" (str "Bearer " @matching-token))))
+        ; Next day (at 5am) we retrieve from the archive.
+        (clj-time/do-at (clj-time/date-time 2016 11 28 5)
+          (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
+                                          (mock/header "authorization" (str "Bearer " @matching-token))))
 
-              {events "events" archive-date "archive-generated"} (json/read-str (:body response))]
+                {events "events" archive-date "archive-generated"} (json/read-str (:body response))]
 
-            ; Now they should be available.
-            (is (= 200 (:status response))
-              "When the archive has been triggered, there should be events.")
+              ; Now they should be available.
+              (is (= 200 (:status response))
+                "When the archive has been triggered, there should be events.")
 
-            (is (.startsWith archive-date "2016-11-28") "Archive date should be the date that the archive was generated")
+              (is (.startsWith archive-date "2016-11-28") "Archive date should be the date that the archive was generated")
 
-            (is (not-empty events) "Response should contain events.")
+              (is (not-empty events) "Response should contain events.")
 
-            (is (= (count events) (count friday-events)) "Right number of events should be returned."))))))
+              (is (= (count events) (count friday-events)) "Right number of events should be returned.")))))))
 
 (deftest ^:component update-events-roundtrip
   (testing "Should be able to push, retrieve in archive, update, then get new archive."
 
-    ; Insert some events. 
-    ; NB all events in the input file have the same prefix for ease of testing.
-    (let [token (.sign @signer {"sub" "wikipedia"})
-          ; An Event we send.
-          original-event {
-            :total 1
-            :source_token "36c35e23-8757-4a9d-aacf-345e9b7eb50d"
-            :obj {},
-            :id "aad96887-7ab9-43b7-a425-c9058c9e8e20"
-            :message_action "create"
-            :message_type "relation"
-            :subj_id "https://species.wikimedia.org/wiki/Pristimantis_colomai"
-            :state "done"
-            :subj {
-              :pid "https://species.wikimedia.org/wiki/Pristimantis_colomai"
-              :title "Pristimantis colomai"
-              :issued "2016-11-25T23:41:09.000Z"
-              :URL "https://species.wikimedia.org/wiki/Pristimantis_colomai"
-              :type "entry-encyclopedia"}
-            :source_id "wikipedia"
-            :relation_type_id "references"
-            :obj_id "https://doi.org/10.11646/zootaxa.4193.3.9"
-            :occurred_at "2016-11-25T23:41:09Z"}
+    ; Don't broadcast.
+    (with-redefs [event-data-event-bus.server/broadcast-live-async (fn [_])]
 
-         ; And the update we're going to send after.
-         updated-event (assoc original-event :updated "deleted" :updated_reason "http://example.com/alternative-facts" :updated_date "2017-01-01")]
+      ; Insert some events. 
+      ; NB all events in the input file have the same prefix for ease of testing.
+      (let [token (.sign @signer {"sub" "wikipedia"})
+            ; An Event we send.
+            original-event {
+              :total 1
+              :source_token "36c35e23-8757-4a9d-aacf-345e9b7eb50d"
+              :obj {},
+              :id "aad96887-7ab9-43b7-a425-c9058c9e8e20"
+              :message_action "create"
+              :message_type "relation"
+              :subj_id "https://species.wikimedia.org/wiki/Pristimantis_colomai"
+              :state "done"
+              :subj {
+                :pid "https://species.wikimedia.org/wiki/Pristimantis_colomai"
+                :title "Pristimantis colomai"
+                :issued "2016-11-25T23:41:09.000Z"
+                :URL "https://species.wikimedia.org/wiki/Pristimantis_colomai"
+                :type "entry-encyclopedia"}
+              :source_id "wikipedia"
+              :relation_type_id "references"
+              :obj_id "https://doi.org/10.11646/zootaxa.4193.3.9"
+              :occurred_at "2016-11-25T23:41:09Z"}
 
-      (clj-time/do-at (clj-time/date-time 2016 11 25)
-        (@server/app (->
-          (mock/request :post "/events")
-          (mock/header "authorization" (str "Bearer " token))
-          (mock/body (json/write-str original-event)))))
+           ; And the update we're going to send after.
+           updated-event (assoc
+                          original-event
+                          :updated "deleted"
+                          :updated_reason "http://example.com/alternative-facts"
+                          :updated_date "2017-01-01")]
+
+        (clj-time/do-at (clj-time/date-time 2016 11 25)
+          (@server/app (->
+            (mock/request :post "/events")
+            (mock/header "authorization" (str "Bearer " token))
+            (mock/body (json/write-str original-event)))))
 
 
-      ; Next day (at 5am) we retrieve from the archive.
-      (clj-time/do-at (clj-time/date-time 2016 11 28 5)
-        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
-                                        (mock/header "authorization" (str "Bearer " @matching-token))))
+        ; Next day (at 5am) we retrieve from the archive.
+        (clj-time/do-at (clj-time/date-time 2016 11 28 5)
+          (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
+                                          (mock/header "authorization" (str "Bearer " @matching-token))))
 
-              event (-> response :body (json/read-str :key-fn keyword) :events first)]
+                event (-> response :body (json/read-str :key-fn keyword) :events first)]
 
-          (is (= original-event (dissoc event :timestamp)) "Event should be retrieved from archive (less timestamp which is added)")))
+            (is (= original-event (dissoc event :timestamp)) "Event should be retrieved from archive (less timestamp which is added)")))
 
-      (clj-time/do-at (clj-time/date-time 2016 11 30)
-        ; Then we update that Event.
-        (let [update-response (@server/app (->
-                                (mock/request :put "/events/aad96887-7ab9-43b7-a425-c9058c9e8e20")
-                                (mock/header "authorization" (str "Bearer " token))
-                                (mock/body (json/write-str updated-event))))]
-          (is (= 201 (:status update-response)) "Event should be accepted with Created."))
+        (clj-time/do-at (clj-time/date-time 2016 11 30)
+          ; Then we update that Event.
+          (let [update-response (@server/app (->
+                                  (mock/request :put "/events/aad96887-7ab9-43b7-a425-c9058c9e8e20")
+                                  (mock/header "authorization" (str "Bearer " token))
+                                  (mock/body (json/write-str updated-event))))]
+            (is (= 201 (:status update-response)) "Event should be accepted with Created."))
 
-        ; Also update a non-existent Event.
-        (let [update-response (@server/app (->
-                                (mock/request :put "/events/aad96887-7ab9-43b7-a425-XXXXX")
-                                (mock/header "authorization" (str "Bearer " token))
-                                (mock/body (json/write-str updated-event))))]
-          (is (= 403 (:status update-response)) "Non-existent Event should not be accepted."))
+          ; Also update a non-existent Event.
+          (let [update-response (@server/app (->
+                                  (mock/request :put "/events/aad96887-7ab9-43b7-a425-XXXXX")
+                                  (mock/header "authorization" (str "Bearer " token))
+                                  (mock/body (json/write-str updated-event))))]
+            (is (= 403 (:status update-response)) "Non-existent Event should not be accepted."))
 
-        ; Also try to update the Event without authorization.
-        (let [update-response (@server/app (->
-                                (mock/request :put "/events/aad96887-7ab9-43b7-a425-XXXXX")
-                                (mock/header "authorization" (str "Bearer " "BAD TOKEN"))
-                                (mock/body (json/write-str updated-event))))]
-          (is (= 403 (:status update-response)) "Bad auth token should not be accepted."))
+          ; Also try to update the Event without authorization.
+          (let [update-response (@server/app (->
+                                  (mock/request :put "/events/aad96887-7ab9-43b7-a425-XXXXX")
+                                  (mock/header "authorization" (str "Bearer " "BAD TOKEN"))
+                                  (mock/body (json/write-str updated-event))))]
+            (is (= 403 (:status update-response)) "Bad auth token should not be accepted."))
 
-        ; Now try and get the archive. It should have been deleted and re-created
-        (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
-                                        (mock/header "authorization" (str "Bearer " @matching-token))))
+          ; Now try and get the archive. It should have been deleted and re-created
+          (let [response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-25/aa"))
+                                          (mock/header "authorization" (str "Bearer " @matching-token))))
 
-              event (-> response :body (json/read-str :key-fn keyword) :events first)]
+                event (-> response :body (json/read-str :key-fn keyword) :events first)]
 
-          (is (= updated-event (dissoc event :timestamp)) "Updated Event should be present in new Archive.")
-          (is (not= event (dissoc event :timestamp)) "Updated Event is different to original Event."))))))
+            (is (= updated-event (dissoc event :timestamp)) "Updated Event should be present in new Archive.")
+            (is (not= event (dissoc event :timestamp)) "Updated Event is different to original Event.")))))))
 
 
 ; Other bits and pieces.

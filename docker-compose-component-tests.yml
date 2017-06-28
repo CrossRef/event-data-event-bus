@@ -3,21 +3,6 @@ services:
   redis:
     image: redis
 
-  ebcstatus:
-    image: crossref/event-data-status:0.1.2
-    expose:
-     - "8003"
-    ports:
-     - "8003:8003"
-    depends_on:
-     - redis
-    environment:
-     - REDIS_HOST=redis
-     - REDIS_PORT=6379
-     - REDIS_DB=0
-     - PORT=8003
-     - JWT_SECRETS=TEST,TEST2
-    command: "lein run"
 
   test:
     build: .
@@ -26,23 +11,14 @@ services:
      - ./.m2-cache:/root/.m2
     depends_on:
      - redis
-     - ebcstatus
     environment:
-     - REDIS_HOST=redis
-     - REDIS_PORT=6379
-     - REDIS_DB=0
-     - JWT_SECRETS=TEST,TEST2
-     - STORAGE=redis
-     - PORT=8002
-     - STATUS_SERVICE=http://ebcstatus:8003
-     - BROADCAST-1-JWT=JWT-ONE
-     - BROADCAST-1-ENDPOINT=http://endpoint1.com/endpoint
-     - BROADCAST-1-NAME=Endpoint One
-     - BROADCAST-1-TYPE=live
-     - BROADCAST-2-JWT=JWT-TWO
-     - BROADCAST-2-ENDPOINT=http://endpoint2.com/endpoint
-     - BROADCAST-2-NAME=Endpoint Two
-     - BROADCAST-2-TYPE=live
+     - BUS_REDIS_HOST=redis
+     - BUS_REDIS_PORT=6379
+     - BUS_REDIS_DB=0
+     - GLOBAL_JWT_SECRETS=TEST,TEST2
+     - BUS_STORAGE=redis
+     - BUS_PORT=8002
+     - BUS_BROADCAST_CONFIG=resources/test/broadcast-config.json
     command: "lein test :component"
 
 

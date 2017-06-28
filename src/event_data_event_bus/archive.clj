@@ -120,7 +120,11 @@
       (store/delete storage storage-key)))
 
 (def storage
-  (delay (s3/build (:s3-key env) (:s3-secret env) (:s3-region-name env) (:s3-bucket-name env))))
+  (delay (s3/build
+         (:bus-s3-key env)
+         (:bus-s3-secret env)
+         (:bus-s3-region-name env)
+         (:bus-s3-bucket-name env))))
 
 (defjob yesterday-archive-job
   [ctx]

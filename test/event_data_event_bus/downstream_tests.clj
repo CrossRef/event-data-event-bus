@@ -1,6 +1,6 @@
 (ns event-data-event-bus.downstream-tests
   "Tests for the downstream namspace.
-   The unit tests use supplied configuraiton maps,
+   The unit tests use supplied configuration maps,
    the component tests rely on configuration variables
    set through the docker-compose-component-test.yml"
   (:require [clojure.test :refer :all]
@@ -9,165 +9,129 @@
             [event-data-event-bus.downstream :as downstream]
             [org.httpkit.fake :as fake]))
 
-(def good-config-map
-  "A config map such as that supplied by config.core"
-  {:broadcast-1-jwt "JWT_ONE"
-   :broadcast-1-endpoint "http://one.com/endpoint"
-   :broadcast-1-name "Endpoint Number One"
-   :broadcast-1-type "live"
-
-   :broadcast-2-jwt "JWT_TWO"
-   :broadcast-2-endpoint "http://two.com/endpoint"
-   :broadcast-2-name "Endpoint Number Two"
-   :broadcast-2-type "batch"
-
-   :broadcast-3-jwt "JWT_THREE"
-   :broadcast-3-endpoint "http://three.com/endpoint"
-   :broadcast-3-name "Endpoint Number Three"
-   :broadcast-3-type "live"
-
-   :broadcast-datacite-jwt "JWT_FOR_DATACITE"
-   :broadcast-datacite-endpoint "http://datcite.org/endpoint"
-   :broadcast-datacite-name "Endpoint for DataCite"
-   :broadcast-datacite-type "batch"
-
-   :broadcast-myqueue-username "myusername"
-   :broadcast-myqueue-password "mypassword"
-   :broadcast-myqueue-endpoint "tcp://my-active-mq-endpoint:61616"
-   :broadcast-myqueue-queue "my-queue"
-   :broadcast-myqueue-name "ActiveMQ Query API Queue"
-   :broadcast-myqueue-type "activemq-queue"
-
-   :broadcast-mytopic-username "myusername"
-   :broadcast-mytopic-password "mypassword"
-   :broadcast-mytopic-endpoint "tcp://my-active-mq-endpoint:61616"
-   :broadcast-mytopic-topic "my-topic"
-   :broadcast-mytopic-name "ActiveMQ Query API Topic"
-   :broadcast-mytopic-type "activemq-topic"
-
-   :completely-irrelevant "don't look"
-   :other-config-keys "turn away"
-   :broadcast-something-else "igonre me"})
-
-(deftest ^:unit parse-broadcast-config
-  (let [endpoint-missing (dissoc good-config-map :broadcast-2-endpoint)
-        name-missing (dissoc good-config-map :broadcast-3-name)
-        type-missing (dissoc good-config-map :broadcast-datacite-type)
-        invalid-type (assoc good-config-map :broadcast-1-type "platypus")
-        good-result (downstream/parse-broadcast-config good-config-map)]
-
-    (is (= good-result
-            {:live
-              (set [{:label "1" :type "live" :jwt "JWT_ONE" :endpoint "http://one.com/endpoint" :name "Endpoint Number One"}
-                    {:label "3" :type "live" :jwt "JWT_THREE" :endpoint "http://three.com/endpoint" :name "Endpoint Number Three"}])
-             :batch
-              (set [{:label "2" :type "batch" :jwt "JWT_TWO" :endpoint "http://two.com/endpoint" :name "Endpoint Number Two"}
-                    {:label "datacite" :type "batch" :jwt "JWT_FOR_DATACITE" :endpoint "http://datcite.org/endpoint" :name "Endpoint for DataCite"}])
-
-             :activemq-queue
-              (set [{:label "myqueue" :type "activemq-queue" :queue "my-queue" :name "ActiveMQ Query API Queue"
-                     :password "mypassword" :endpoint "tcp://my-active-mq-endpoint:61616" :username "myusername"
-                     :queue-config {:username "myusername"
-                                    :password "mypassword"
-                                    :queue-name "my-queue"
-                                    :url "tcp://my-active-mq-endpoint:61616"}}])
-
-              :activemq-topic
-              (set [{:label "mytopic" :type "activemq-topic" :topic "my-topic" :name "ActiveMQ Query API Topic"
-                     :password "mypassword" :endpoint "tcp://my-active-mq-endpoint:61616" :username "myusername"
-                     :queue-config {:username "myusername"
-                                    :password "mypassword"
-                                    :topic-name "my-topic"
-                                    :url "tcp://my-active-mq-endpoint:61616"}}])}))
-
-    (testing "parse-broadcast-config is able to parse a downstream configuration out of a configuration map"
-      (is (nil? (downstream/parse-broadcast-config endpoint-missing)) "Missing endpoint key in one item should result in error.")
-      (is (nil? (downstream/parse-broadcast-config name-missing)) "Missing name key in one item should result in error.")
-      (is (nil? (downstream/parse-broadcast-config type-missing)) "Missing type key in one item should result in error.")
-      (is (nil? (downstream/parse-broadcast-config invalid-type)) "Invalid type in one item should result in error."))))
+; Config in docker-compose-compoennt-tests.yml sets BUS_BROADCAST_CONFIG=resources/test/broadcast-config.json
 
 (deftest ^:component parse-environment-variables
   (testing "load-broadcast-config can read an environment variable configuration structure from real environment variables and produce a downstream configuration."
-    (is (= {:live #{{:label "1", :type "live", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE"}
-                    {:label "2", :type "live", :name "Endpoint Two", :endpoint "http://endpoint2.com/endpoint", :jwt "JWT-TWO"}},
-            :batch #{}
-            :activemq-queue #{}}
+    (is (= {:http-post-live {
+             :example.com_post {
+               :jwt "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSIsInN1YiI6Indpa2lwZWRpYSJ9.w7zV2vtKNzrNDfgr9dfRpv6XYnspILRli_V5vd1J29Q"
+               :endpoint "http://example.com/events"}
+               :example2.com_post {
+                :jwt "XXX"
+                :endpoint "http://example2.com/events"}}
+            :kafka-live {
+              :my_kafka {
+                :bootstrap-servers "localhost:9092,other:9092"
+                :topic "my-topic"}
+              :your_kafka {
+                :bootstrap-servers "you:9092"
+                :topic "your-topic"}}}
+
            (downstream/load-broadcast-config)) "Correct structure should be retrieved ")
     (is (= @downstream/downstream-config-cache (downstream/load-broadcast-config)) "Config should be cached.")))
 
 (deftest ^:component incoming-outgoing
   (testing "All incoming events should be sent to all listeners, even unreliable ones."
-    ; Pre-check that we got what we expected.
-    (is (= {:live #{{:label "1", :name "Endpoint One", :endpoint "http://endpoint1.com/endpoint", :jwt "JWT-ONE", :type "live"}
-                    {:label "2", :type "live", :name "Endpoint Two", :jwt "JWT-TWO", :endpoint "http://endpoint2.com/endpoint"}}
-            :batch #{}
-            :activemq-queue #{}}
-           (downstream/load-broadcast-config)) "Correct structure should be retrieved ")
-      
-      ; We have unreliable downstream agents.
-      (let [endpoint-1-i (atom -1)
-            endpoint-2-i (atom -1)
+    ; We have unreliable downstream agents.
+    (let [http-endpoint-1-i (atom -1)
+          http-endpoint-2-i (atom -1)
 
-            good-response {:status 201 :body "Good!"}
-            bad-response {:status 400 :body "Bad?"}
-            error-response {:status 500 :body "Ugly‽"}
+          http-good-response {:status 201 :body "Good!"}
+          http-bad-response {:status 400 :body "Bad?"}
+          http-error-response {:status 500 :body "Ugly‽"}
 
-            ; A selection of unreliable, but ultimately functional downstream consumers.
-            endpoint-1-responses [bad-response error-response good-response]
-            endpoint-2-responses [error-response bad-response good-response]
+          ; A selection of unreliable, but ultimately functional downstream consumers.
+          http-endpoint-1-responses [http-bad-response http-error-response http-good-response]
+          http-endpoint-2-responses [http-error-response http-bad-response http-good-response]
 
-            ; We'll need to block the test because this is asynchronous.
-            endpoint-1-done (promise)
-            endpoint-2-done (promise)
+          ; We'll need to block the test because this is asynchronous.
+          http-endpoint-1-done (promise)
+          http-endpoint-2-done (promise)
 
-            ; Collect the bodies that are sent.
-            sent-1 (atom (list))
-            sent-2 (atom (list))
+          ; Collect the bodies that are sent.
+          http-sent-1 (atom (list))
+          http-sent-2 (atom (list))
 
-            ; Two monitors so our test can wait until everything's finished running.
-            monitor-1 (promise)
-            monitor-2 (promise)]
+          ; Two monitors so our test can wait until everything's finished running.
+          http-monitor-1 (promise)
+          http-monitor-2 (promise)
 
-        ; Fake endpoints that step through the sequence of responses.
-        (fake/with-fake-http ["http://endpoint1.com/endpoint"
-                              (fn [orig-fn opts callback] 
-                                ; Increment counter.
-                                (swap! endpoint-1-i inc)
-                                
-                                ; When we reach the end, deliver the promise so that the test can stop waiting.
-                                (when (= good-response (endpoint-1-responses @endpoint-1-i))
-                                  ; Save the body that was sent on a successful response.
-                                  (swap! sent-1 #(conj % (:body opts)))
-                                  (deliver monitor-1 1))
+          kafka-sent-1 (atom nil)
+          kafka-sent-2 (atom nil)
+          kafka-monitor-1 (promise)
+          kafka-monitor-2 (promise)
+          kafka-fake-producer :fake]
 
-                                ; Return the predetermined response per counter.
-                                (nth endpoint-1-responses @endpoint-1-i))
+      ; Fake HTTP endpoints that step through the sequence of responses.
+      (fake/with-fake-http ["http://example.com/events"
+                            (fn [orig-fn opts callback] 
+                              ; Increment counter.
+                              (swap! http-endpoint-1-i inc)
+                              
+                              ; When we reach the end, deliver the promise so that the test can stop waiting.
+                              (when (= http-good-response (http-endpoint-1-responses @http-endpoint-1-i))
+                                ; Save the body that was sent on a successful response.
+                                (swap! http-sent-1 #(conj % (:body opts)))
+                                (deliver http-monitor-1 1))
+
+                              ; Return the predetermined response per counter.
+                              (nth http-endpoint-1-responses @http-endpoint-1-i))
 
 
-                              "http://endpoint2.com/endpoint"
-                              (fn [orig-fn opts callback] 
+                            "http://example2.com/events"
+                            (fn [orig-fn opts callback] 
 
-                                ; Increment counter.
-                                (swap! endpoint-2-i inc)
+                              ; Increment counter.
+                              (swap! http-endpoint-2-i inc)
 
-                                ; When we reach the end, deliver the promise so that the test can stop waiting.
-                                (when (= good-response (endpoint-2-responses @endpoint-2-i))
-                                  ; Save the body that was sent on a successful response.
-                                  (swap! sent-2 #(conj % (:body opts)))
-                                  (deliver monitor-2 1))
+                              ; When we reach the end, deliver the promise so that the test can stop waiting.
+                              (when (= http-good-response (http-endpoint-2-responses @http-endpoint-2-i))
+                                ; Save the body that was sent on a successful response.
+                                (swap! http-sent-2 #(conj % (:body opts)))
+                                (deliver http-monitor-2 1))
 
-                                ; Return the predetermined response per counter.
-                                (nth endpoint-2-responses @endpoint-2-i))]
+                              ; Return the predetermined response per counter.
+                              (nth http-endpoint-2-responses @http-endpoint-2-i))]
 
+        ; Also fake out Kafka sending.
+        (with-redefs [event-data-event-bus.downstream/retry-delay 0
+
+                      ; Prevent producer from being constructed.
+                      ; We're mocking out the only thing that uses it anyway.
+                      event-data-event-bus.downstream/get-kafka-producer
+                      (constantly kafka-fake-producer)
+
+                      event-data-event-bus.downstream/send-kafka-producer
+                      (fn [producer topic id event]
+                        (when (= topic "my-topic")
+                          (swap! kafka-sent-1 #(conj % event))
+                          (deliver kafka-monitor-1 1))
+
+                        (when (= topic "your-topic")
+                          (swap! kafka-sent-2 #(conj % event))
+                          (deliver kafka-monitor-2 1)))]
 
           ; Broadcast using the configuration from environment variables and see what happens.
           ; A tiny Event with only an ID. Not technically valid, but enough to test.
-          (downstream/broadcast-live {:id "d24e5449-7835-44f4-b7e6-289da4900cd0"})
+          (downstream/broadcast-live {:id "d24e5449-7835-44f4-b7e6-289da4900cd0"}))
 
-          ; Wait for everything to complete.
-          @monitor-1
-          @monitor-2
+        ; Wait for everything to complete.
+        @http-monitor-1
+        @http-monitor-2
+        @kafka-monitor-1
+        @kafka-monitor-2
 
-          (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @sent-1) "Correct body should be sent to endpoint 1 exactly once.")
-          (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @sent-2) "Correct body should be sent to endpoint 2 exactly once.")))))
+        (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @http-sent-1)
+            "Correct body should be sent to HTTP endpoint 1 exactly once.")
+        
+        (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @http-sent-2)
+            "Correct body should be sent to HTTP endpoint 2 exactly once.")
+
+        (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @kafka-sent-1)
+            "Correct body should be sent to Kafka connection 1 exactly once.")
+
+        (is (= ["{\"id\":\"d24e5449-7835-44f4-b7e6-289da4900cd0\"}"] @kafka-sent-2)
+            "Correct body should be sent to Kafka connection 2 exactly once.")))))
+
 

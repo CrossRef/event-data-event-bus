@@ -16,6 +16,7 @@
             [event-data-common.jwt :as jwt]
             [event-data-common.storage.redis :as redis]
             [event-data-common.storage.s3 :as s3]
+            [event-data-common.storage.memory :as memory]
             [event-data-common.storage.store :as store]
             [event-data-common.date :as date]
             [event-data-common.status :as status]
@@ -52,16 +53,25 @@
 
 (def redis-store
   "A redis connection for storing subscription and short-term information."
-  (delay (redis/build redis-prefix (:redis-host env) (Integer/parseInt (:redis-port env)) (Integer/parseInt (get env :redis-db default-redis-db-str)))))
+  (delay (redis/build
+            redis-prefix
+            (:bus-redis-host env)
+            (Integer/parseInt (:bus-redis-port env))
+            (Integer/parseInt (get env :bus-redis-db default-redis-db-str)))))
 
 (def storage
   "A event-data-event-bus.storage.store.Store for permanently storing things"
   (delay
-    (condp = (:storage env "s3")
+    (condp = (:bus-storage env "s3")
+      ; Memory can be used for unit testing ONLY.
+      "memory" (memory/build)
       ; Redis can be used for component testing ONLY. Reuse the redis connection.
       "redis" @redis-store
       ; S3 is suitable for production.
-      "s3" (s3/build (:s3-key env) (:s3-secret env) (:s3-region-name env) (:s3-bucket-name env)))))
+      "s3" (s3/build (:bus-s3-key env)
+                     (:bus-s3-secret env)
+                     (:bus-s3-region-name env)
+                     (:bus-s3-bucket-name env)))))
 
 (defresource home
   []
@@ -77,12 +87,9 @@
   :available-media-types ["application/json"]
   :handle-ok (fn [context]
               (let [now (clj-time/now)]
-                ; Set a key in redis, then get it, to confirm connection.
-                (store/set-string @redis-store "heartbeat-ok" (str now))
                 (let [report {:machine_name (.getHostName (InetAddress/getLocalHost))
                               :version (System/getProperty "event-data-event-bus.version")
                               :up-since (str @up-since)
-                              :redis-checked (str (store/get-string @redis-store "heartbeat-ok"))
                               :now (str now)
                               :status "OK"}]
                   report))))
@@ -98,9 +105,6 @@
                 (-> ctx :request :jwt-claims :sub))
   :handle-ok {"status" "ok"})
 
-
-
-
 (defn timestamp-event
   "Prepare an Event for ingestion. Add timestamp.
    Return [event, 'YYYY-MM-DD']"
@@ -109,6 +113,11 @@
         iso8601 (clj-time-format/unparse date-format now)
         yyyy-mm-dd (clj-time-format/unparse date/yyyy-mm-dd-format now)]
     [(assoc event :timestamp iso8601) yyyy-mm-dd]))
+
+(defn broadcast-live-async
+  [event]
+  (future
+    (downstream/broadcast-live event)))
 
 ; "Create Events."
 (defresource events
@@ -168,13 +177,12 @@
     ; Don't return the URL of the new event on the API (although it should be available),
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
-    (status/add! "event-bus" "event" "received" 1)
+    (status/send! "event-bus" "event" "received")
     (let [json (json/write-str (::event ctx))]
-      (status/add! "event-bus" "event-by-source" (-> ctx ::payload :source_id) 1)
+      (status/send! "event-bus" "event" "sent" -1 1 (-> ctx ::payload :source_id))
 
       ; Send to all subscribers.
-      (future
-        (downstream/broadcast-live (::event ctx)))
+      (broadcast-live-async (::event ctx))
 
       ; And save.
       (archive/save-event @storage (::event-id ctx) (::yyyy-mm-dd ctx) json))))
@@ -203,15 +211,14 @@
                 [(and event-exists? source-id-ok) {::new-event merged-event}]))
 
     :put! (fn [ctx]
-                  (status/add! "event-bus" "event" "updated" 1)
                   (let [new-event (::new-event ctx)
                         json (json/write-str new-event)
                         date-str (.substring (:timestamp new-event) 0 10)]
-                    (status/add! "event-bus" "event-updated-by-source" (-> ctx ::payload :source_id) 1)
+                    
+                    (status/send! "event-bus" "event" "updated" -1 1 (:id new-event))
 
                     ; Send to all subscribers.
-                    (future
-                      (downstream/broadcast-live new-event))
+                    (broadcast-live-async new-event)
 
                     ; And save.
                     (archive/save-event @storage (:id new-event) date-str json)
@@ -280,7 +287,7 @@
   (delay
     (-> app-routes
        middleware-params/wrap-params
-       (jwt/wrap-jwt (:jwt-secrets env))
+       (jwt/wrap-jwt (:global-jwt-secrets env))
        (middleware-content-type/wrap-content-type)
        (wrap-cors))))
 
@@ -288,13 +295,9 @@
 
 
 (defn run-server []
-  (let [port (Integer/parseInt (:port env))]
+  (let [port (Integer/parseInt (:bus-port env))]
     (l/info "Start heartbeat")
     (at-at/every 10000 #(status/send! "event-bus" "heartbeat" "tick" 1) schedule-pool)
-
-    (l/info "Load broadcast config...")
-    @downstream/downstream-config-cache
-    (l/info "Loaded broadcast config.")
 
     (l/info "Start server on " port)
     (server/run-server @app {:port port})))

@@ -8,15 +8,16 @@ services:
     depends_on:
      - redis
     environment:
-     - REDIS_HOST=redis
-     - REDIS_PORT=6379
-     - REDIS_DB=0
-     - JWT_SECRETS=TEST,TEST2
-     - STORAGE=s3
-     - S3_KEY=${S3_KEY}
-     - S3_SECRET=${S3_SECRET}
-     - S3_BUCKET_NAME=${S3_BUCKET_NAME}
-     - S3_REGION_NAME=${S3_REGION_NAME}
+     - BUS_REDIS_HOST=redis
+     - BUS_REDIS_PORT=6379
+     - BUS_REDIS_DB=0
+     - GLOBAL_JWT_SECRETS=TEST,TEST2
+     - BUS_STORAGE=s3
+     - BUS_S3_KEY=${S3_KEY}
+     - BUS_S3_SECRET=${S3_SECRET}
+     - BUS_S3_BUCKET_NAME=${S3_BUCKET_NAME}
+     - BUS_S3_REGION_NAME=${S3_REGION_NAME}
+     - BUS_BROADCAST_CONFIG=resources/test/broadcast-config.json
     command: "lein test :integration"
 
   redis:

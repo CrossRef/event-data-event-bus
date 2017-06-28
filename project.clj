@@ -4,7 +4,7 @@
   :license {:name "MIT License"
             :url "https://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [event-data-common "0.1.26"]
+                 [event-data-common "0.1.30"]
                  [org.clojure/data.json "0.2.6"]
                  [crossref-util "0.1.10"]
                  [http-kit "2.1.18"]
@@ -34,8 +34,7 @@
                  [clojurewerkz/quartzite "2.0.0"]
                  [org.clojure/math.combinatorics "0.1.4"]
 
-                 ;; https://mvnrepository.com/artifact/org.apache.activemq/activemq-client
-                 [org.apache.activemq/activemq-client "5.14.5"]]
+                 [org.apache.kafka/kafka-clients "0.10.2.0"]]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
   :test-selectors {:default (constantly true)

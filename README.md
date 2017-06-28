@@ -14,9 +14,9 @@ The Event Data Bus is responsible for the following:
  - serve as a fan-out for the various services that DataCite and Crossref want to operate
  - updating the archive in exceptional circumstances
 
-All access to the service is authenticated.
+All access to the service is authenticated, so it is not available to the public.
 
-The Event Data Bus also serves as a development and integration target for users writing agents. It is available as a Docker container and also a plain Leiningen Clojure project.
+The Event Data Bus also serves as a development and integration target for users writing agents. It is available as a Docker container.
 
 ## Design
 
@@ -218,43 +218,55 @@ The Event Data Bus should be deployed as part of the wider Event Data system. It
 
 ## Configuration Parameters
 
-All configuration variables are required. Some have defaults.
+The Event Bus uses the Crossref Event Data global configuration namespace. All configuration variables are required. Some have defaults.
 
 Note that during development and testing Docker Compose refers to the `.env` file for some of these.
 
-| Environment variable | Description                         | Default | Required? |
-|----------------------|-------------------------------------|---------|-----------|
-| `REDIS_HOST`         | Redis host                          |         | Yes       |
-| `REDIS_PORT`         | Redis port                          |         | Yes       |
-| `REDIS_DB`           | Redis DB number                     | 0       | No        |
-| `S3_KEY`             | AWS Key Id                          |         | If storage = "s3" | 
-| `S3_SECRET`          | AWS Secret Key                      |         | If storage = "s3" |
-| `S3_BUCKET_NAME`     | AWS S3 bucket name                  |         | If storage = "s3" |
-| `S3_REGION_NAME`     | AWS S3 bucket region name           |         | If storage = "s3" |
-| `PORT`               | Port to listen on                   | 9990    | Yes         |
-| `STATUS_SERVICE`     | Public URL of the Status service    |         | No, ignored if not supplied |
-| `JWT_SECRETS`        | Comma-separated list of JTW Secrets |         | Yes |
-| `STORAGE`            | Where to put permanent storage, "redis" or "s3". "redis" is only for testing. | s3 | No |
+ - `BUS_PORT`
+ - `BUS_REDIS_DB`
+ - `BUS_REDIS_HOST`
+ - `BUS_REDIS_PORT`
+ - `BUS_S3_BUCKET_NAME`
+ - `BUS_S3_KEY`
+ - `BUS_S3_REGION_NAME`
+ - `BUS_S3_SECRET`
+ - `BUS_STORAGE` - where to put permanent storage, "redis" or "s3". "redis" is only for testing. | s3 | No |
+ - `BUS_BROADCAST_CONFIG` - file path containing the broadcast configuration file
+ - `GLOBAL_JWT_SECRETS`
+ - `GLOBAL_STATUS_TOPIC`
+ - `GLOBAL_KAFKA_BOOTSTRAP_SERVERS`
 
-Downstream subscribers are also specified by environment variables. Each subscriber must supply the following options:
+The Broadcast configuration file is a JSON file containing an array of downstream targets. Targets can be the following types:
 
- - `JWT` a JWT token to be passed in a Authorization Bearer header, **if** type is `live` or `batch`
- - `USERNAME`, `PASSWORD` and `QUEUE` **if** the type is `activemq-queue`
- - `USERNAME`, `PASSWORD` and `TOPIC` **if** the type is `activemq-topic`
- - `ENDPOINT` a full URL for the event to be sent to
- - `NAME` a descriptive name
- - `TYPE` one of `live`, `batch`, `activemq-queue` or `activemq-topic`.
+ - `http-post-live` - Events are POSTed to an HTTP endpoint as they appear
+ - `kafka-live` - Events are sent to an Apache Kafka Topic as they appear
 
-The subscriber must also have a label to identify it. Each subscriber should supply the following environment variables:
+When the type is `http-post-list` the following fields should be supplied:
 
- - `BROADCAST-«label»-JWT`
- - `BROADCAST-«label»-ENDPOINT`
- - `BROADCAST-«label»-NAME`
- - `BROADCAST-«label»-TYPE`
+ - `jwt` a JWT token to be passed in a Authorization Bearer header
+ - `endpoint` a URL to POST to
 
-It is not compulsory to have any subscribers, but each one must come in a complete bock of all fields.
+When the type is `kafka-live` the following fields should be supplied:
 
-An example configuration is supplied in the `docker-compose-component-tests.yml` file.
+ - `bootstrap-servers` - Kafka bootstrap servers config
+ - `topic` - Kafka topic name
+
+The format of the broadcast configuraiton file is {type -> {label -> {values}} dictionary. A complete example:
+
+    {
+      "http-post-live": {
+        "example.com post": {
+          "jwt": "abcdefgh",
+          "endpoint": "http://example.com/events"
+        }
+      },
+      "kafka-live": {
+        "my kafka": {
+          "bootstrap-servers": "localhost:9092,other:9092",
+          "topic": "my-topic"
+        }
+      }
+    }
 
 ## Tests
 
@@ -285,10 +297,10 @@ These are generally at the API level and require Redis to be configured. They mo
 
 These run at the API level and test integration with S3, and therefore must be configured for S3. The actual test suite executed is component tests, except configured to run against S3. You must include a .env file with the following keys:
 
- - `S3_KEY`
- - `S3_SECRET`
- - `S3_BUCKET_NAME`
- - `S3_REGION_NAME`
+ - `BUS_S3_KEY`
+ - `BUS_S3_SECRET`
+ - `BUS_S3_BUCKET_NAME`
+ - `BUS_S3_REGION_NAME`
 
 Then
 
@@ -296,7 +308,7 @@ Then
 
 If the bucket is not empty, tests will still pass, but it may take a long time to clear the bucket. The AWS command-line tools provide a quick parallel way to empty a bucket **but exercise caution**:
 
- - `source .env && aws s3 rm --region $S3_REGION_NAME --recursive s3://$S3_BUCKET_NAME`
+ - `source .env && aws s3 rm --region $BUS_S3_REGION_NAME --recursive s3://$BUS_S3_BUCKET_NAME`
 
 ## Docker
 

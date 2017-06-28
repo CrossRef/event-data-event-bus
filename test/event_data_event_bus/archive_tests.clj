@@ -16,7 +16,11 @@
 
 (def redis-store
   "A redis connection for storing subscription and short-term information."
-  (delay (redis/build "test" (:redis-host env) (Integer/parseInt (:redis-port env)) (Integer/parseInt (get env :redis-db)))))
+  (delay (redis/build
+            "test"
+            (:bus-redis-host env)
+            (Integer/parseInt (:bus-redis-port env))
+            (Integer/parseInt (:bus-redis-db env)))))
 
 (deftest ^:component should-archive-day
   ; This is similar to the test in the server-tests but uses the functions directly.
@@ -40,14 +44,5 @@
 
     (clj-time/do-at sunday
       (doseq [event sunday-events]
-        (archive/save-event @redis-store (event "id") "2016-11-27" (json/write-str event))))
-
-    ; (let [saturday-archive (archive/archive-for @redis-store "2016-11-26/aa")
-          ; saturday-archive-events (get saturday-archive "events")]
-      ; (is (= (count saturday-events) (count saturday-archive-events)) "All events returned")
-      ; (is (= (set (map #(% "id") saturday-events))
-             ; (set (map #(% "id") saturday-archive-events))) "All events returned")
-      ; )
-
-    ))
+        (archive/save-event @redis-store (event "id") "2016-11-27" (json/write-str event))))))
 
