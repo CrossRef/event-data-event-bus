@@ -130,42 +130,45 @@
                 (-> ctx :request :jwt-claims))
 
   :malformed? (fn [ctx]
-                (let [payload (try (-> ctx :request :body reader (json/read :key-fn keyword)) (catch Exception _ nil))
-                      schema-errors (schema/validation-errors payload)]
-                  [schema-errors {::payload payload ::schema-errors schema-errors}]))
+                (let [event (try (-> ctx :request :body reader (json/read :key-fn keyword)) (catch Exception _ nil))
+                      schema-errors (schema/validation-errors event)]
+                  [schema-errors {::event event ::schema-errors schema-errors}]))
 
   :allowed? (fn
               [ctx]
               ; Allowed only if the `sub` of the claim matches the `source_id` of the event.
               (let [; Check that the source ID matches.
-                    source-id-ok (= (-> ctx ::payload :source_id)
+                    source-id-ok (= (-> ctx ::event :source_id)
                                     (get-in ctx [:request :jwt-claims "sub"]))
                     
+                    event-id (-> ctx ::event :id)
+                    
                     ; Get the event with timestamp.
-                    [event yyyy-mm-dd] (timestamp-event (::payload ctx))
+                    [event-with-timestamp yyyy-mm-dd] (timestamp-event (::event ctx))]
 
-                    event-id (:id event)
-                  
-                    ; Do a quick check in Redis to see if the event already exists.
-                    ; The mutex expires after a bit, long enough to cover any delay in S3 propagation.
-                    quick-check-ok (redis/expiring-mutex!? @redis-store (str "exists" event-id) quick-check-expiry)
+                  [source-id-ok {::event-id event-id
+                                 ; Replace Event in ctx with timestamped one.
+                                 ::event event-with-timestamp
+                                 ::yyyy-mm-dd yyyy-mm-dd}]))
+  
+  ; This combination of :put-to-existing? true, :conflict? true and :post-to-existing? checking pre-existence
+  ; has the effect of returning a 409 conflict when a duplicate Event is sent.
+  ; Slighly odd but these are logic that Liberator uses.
+  :put-to-existing? true
+  :conflict? true
 
-                    ; Also check permanent storage for existence.
-                    storage-check-ok (nil? (store/get-string @storage (archive/storage-path-for-event event-id)))
+  :post-to-existing?
+  (fn [ctx]
+    (let [event-id (-> ctx ::event :id)
+      
+          ; Do a quick check in Redis to see if the event already exists.
+          ; The mutex expires after a bit, long enough to cover any delay in S3 propagation.
+          quick-check-ok (redis/expiring-mutex!? @redis-store (str "exists" event-id) quick-check-expiry)
 
-                    allowed? (and
-                              ; accept if the source matches
-                              source-id-ok
-
-                              ; and we haven't just already sent it
-                              quick-check-ok
-
-                              ; and we haven't sent it in the past
-                              storage-check-ok)]
-
-                  [allowed? {::event-id event-id
-                             ::yyyy-mm-dd yyyy-mm-dd
-                             ::event event}]))
+          ; Also check permanent storage for existence.
+          storage-check-ok (nil? (store/get-string @storage (archive/storage-path-for-event event-id)))]
+      
+      (and quick-check-ok storage-check-ok)))
 
   :handle-malformed (fn [ctx]
                       (json/write-str (if-let [schema-errors (::schema-errors ctx)]
@@ -178,6 +181,7 @@
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
     (status/send! "event-bus" "event" "received")
+
     (let [json (json/write-str (::event ctx))]
       (status/send! "event-bus" "event" "sent" -1 1 (-> ctx ::payload :source_id))
 

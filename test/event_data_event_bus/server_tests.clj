@@ -110,6 +110,7 @@
 
         (is (= 201 (:status response)) "Should be created OK.")
         ; The returned event will have added field(s) e.g. timestamp, so won't be identical. Should be a proper superset though.
+
         (is (clojure.set/subset? (set event)
                                  (set (json/read-str (:body get-event-response))))) "Same event should be retrievable afterwards."))))
 
@@ -219,7 +220,7 @@
                                          (mock/body event)))]
 
         (is (= 201 (:status first-response)) "Should be created OK.")
-        (is (= 403 (:status second-response)) "Duplicate should be rejected."))))
+        (is (= 409 (:status second-response)) "Duplicate should be rejected."))))
 
 (deftest ^:component should-assign-timestamps
   ; TODO
