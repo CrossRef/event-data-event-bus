@@ -48,8 +48,7 @@
            (log/info "Got" (.count records) "records." (.hashCode records))
            (doseq [^ConsumerRecords record records]
              (try
-              (let [result (server-f (input-event->ring-request (.value record)))
-                    result2 (server-f (input-event->ring-request (.value record)))]
+              (let [result (server-f (input-event->ring-request (.value record)))]
                 
                 ; Created or already exists (for duplicates).
                 (when-not (#{201 409} (:status result))
