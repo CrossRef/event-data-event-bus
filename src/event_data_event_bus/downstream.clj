@@ -72,11 +72,11 @@
         producer))))
 
 (defn send-kafka-producer
-  [producer topic event-id event-structure]
+  [producer topic event-id event-json]
   (.send producer
          (ProducerRecord. topic
                           event-id
-                          (json/write-str event-structure))))
+                          event-json)))
 
 (def downstream-config-cache (delay (load-broadcast-config)))
 
