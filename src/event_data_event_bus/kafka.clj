@@ -28,7 +28,7 @@
   []
   (let [properties (java.util.Properties.)]
      (.put properties "bootstrap.servers" (:global-kafka-bootstrap-servers env))
-     (.put properties "group.id"  "bus-input")
+     (.put properties "group.id"  "bus-input-check2")
      (.put properties "key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
      (.put properties "value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
      
@@ -46,16 +46,20 @@
          (let [^ConsumerRecords records (.poll consumer (int 10000))]
            
            (log/info "Got" (.count records) "records." (.hashCode records))
-           (doseq [^ConsumerRecords record records]
+           (doall (pmap (fn [^ConsumerRecords record]
              (try
               (let [result (server-f (input-event->ring-request (.value record)))]
-                
+(log/info (:id (json/read-str (.value record) :key-fn keyword)) (:status result))
                 ; Created or already exists (for duplicates).
                 (when-not (#{201 409} (:status result))
                   (log/error "Failed to process Event ID" (.key record) "got result" result)))
 
               (catch Exception ex (do
                 (.printStackTrace ex)
-                (log/error "Exception processing Event ID" (.key record) (.getMessage ex)))))))
+                (log/error "Exception processing Event ID" (.key record) (.getMessage ex))))))
+           records
+
+
+           )))
 
           (recur)))))

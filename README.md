@@ -231,7 +231,7 @@ Note that during development and testing Docker Compose refers to the `.env` fil
  - `BUS_S3_REGION_NAME`
  - `BUS_S3_SECRET`
  - `BUS_STORAGE` - where to put permanent storage, "redis" or "s3". "redis" is only for testing. | s3 | No |
- - `BUS_BROADCAST_CONFIG` - file path containing the broadcast configuration file
+ - `BUS_BROADCAST_CONFIG` - JSON string containing the broadcast configuration
  - `GLOBAL_JWT_SECRETS`
  - `GLOBAL_STATUS_TOPIC`
  - `GLOBAL_KAFKA_BOOTSTRAP_SERVERS`

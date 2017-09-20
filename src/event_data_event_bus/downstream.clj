@@ -1,6 +1,6 @@
 (ns event-data-event-bus.downstream
   "Send Events on their way downstream.
-  Configuration should be supplied in a JSON file specified at the path given by BUS_BROADCAST_CONFIG.
+  Configuration should be supplied in a JSON given at the path given by BUS_BROADCAST_CONFIG.
   Example of config:
 
   {
@@ -42,10 +42,10 @@
 (defn load-broadcast-config
   []
   "Load broadcast configuration structure from environment variable config."
-   (let [config-path (:bus-broadcast-config env)
-         value (json/read-str (slurp config-path) :key-fn keyword)]
-      (log/debug "Loaded broadcast config from " config-path)
-   value))
+   (when-let [config-json (:bus-broadcast-config env)]
+     (let [value (json/read-str config-json :key-fn keyword)]
+       (log/debug "Loaded broadcast config: " config-json)
+       value)))
 
 ; Map of config label to Kafka producer.
 (def kafka-producers (atom {}))

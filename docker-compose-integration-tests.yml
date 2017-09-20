@@ -17,7 +17,7 @@ services:
      - BUS_S3_SECRET=${S3_SECRET}
      - BUS_S3_BUCKET_NAME=${S3_BUCKET_NAME}
      - BUS_S3_REGION_NAME=${S3_REGION_NAME}
-     - BUS_BROADCAST_CONFIG=resources/test/broadcast-config.json
+     - 'BUS_BROADCAST_CONFIG={"http-post-live": {"example.com_post": {"jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSIsInN1YiI6Indpa2lwZWRpYSJ9.w7zV2vtKNzrNDfgr9dfRpv6XYnspILRli_V5vd1J29Q","endpoint": "http://example.com/events"},"example2.com_post": {"jwt": "XXX","endpoint": "http://example2.com/events"}},"kafka-live": {"my_kafka": {"bootstrap-servers": "localhost:9092,other:9092","topic": "my-topic"},"your_kafka": {"bootstrap-servers": "you:9092","topic": "your-topic"}}}'
     command: "lein test :integration"
 
   redis:

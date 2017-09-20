@@ -18,7 +18,7 @@ services:
      - GLOBAL_JWT_SECRETS=TEST,TEST2
      - BUS_STORAGE=redis
      - BUS_PORT=8002
-     - BUS_BROADCAST_CONFIG=resources/test/broadcast-config.json
+     - 'BUS_BROADCAST_CONFIG={"http-post-live": {"example.com_post": {"jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyIxIjoiMSIsInN1YiI6Indpa2lwZWRpYSJ9.w7zV2vtKNzrNDfgr9dfRpv6XYnspILRli_V5vd1J29Q","endpoint": "http://example.com/events"},"example2.com_post": {"jwt": "XXX","endpoint": "http://example2.com/events"}},"kafka-live": {"my_kafka": {"bootstrap-servers": "localhost:9092,other:9092","topic": "my-topic"},"your_kafka": {"bootstrap-servers": "you:9092","topic": "your-topic"}}}'
     command: "lein test :component"
 
 

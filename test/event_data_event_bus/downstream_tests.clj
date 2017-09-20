@@ -9,7 +9,7 @@
             [event-data-event-bus.downstream :as downstream]
             [org.httpkit.fake :as fake]))
 
-; Config in docker-compose-compoennt-tests.yml sets BUS_BROADCAST_CONFIG=resources/test/broadcast-config.json
+; Config in docker-compose-compoennt-tests.yml sets configuration.
 
 (deftest ^:component parse-environment-variables
   (testing "load-broadcast-config can read an environment variable configuration structure from real environment variables and produce a downstream configuration."
