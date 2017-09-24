@@ -19,7 +19,7 @@
             [event-data-common.storage.memory :as memory]
             [event-data-common.storage.store :as store]
             [event-data-common.date :as date]
-            [event-data-common.status :as status]
+            [event-data-common.evidence-log :as evidence-log]
             [event-data-event-bus.schema :as schema]
             [event-data-event-bus.archive :as archive]
             [event-data-event-bus.downstream :as downstream]
@@ -180,13 +180,17 @@
     ; Don't return the URL of the new event on the API (although it should be available),
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
-    (status/send! "event-bus" "event" "received")
-
     (let [json (json/write-str (::event ctx))]
-      (status/send! "event-bus" "event" "sent" -1 1 (-> ctx ::payload :source_id))
+      (evidence-log/log!
+        {:i "b0001"
+         :s "event-bus"
+         :c "event"
+         :f "received"
+         :n (-> ctx ::payload :id)
+         :v (-> ctx ::payload :source_id)})
 
-      ; Send to all subscribers.
-      (broadcast-live-async (::event ctx))
+        ; Send to all subscribers.
+        (broadcast-live-async (::event ctx))
 
       ; And save.
       (archive/save-event @storage (::event-id ctx) (::yyyy-mm-dd ctx) json))))
@@ -219,7 +223,14 @@
                         json (json/write-str new-event)
                         date-str (.substring (:timestamp new-event) 0 10)]
                     
-                    (status/send! "event-bus" "event" "updated" -1 1 (:id new-event))
+                    (evidence-log/log!
+                      {:i "b0002"
+                       :s "event-bus"
+                       :c "event"
+                       :f "updated"
+                       :n (-> new-event :id)
+                       :v (-> new-event :source_id)})
+
 
                     ; Send to all subscribers.
                     (broadcast-live-async new-event)
@@ -297,11 +308,17 @@
 
 (def schedule-pool (at-at/mk-pool))
 
-
 (defn run-server []
   (let [port (Integer/parseInt (:bus-port env))]
     (l/info "Start heartbeat")
-    (at-at/every 10000 #(status/send! "event-bus" "heartbeat" "tick" 1) schedule-pool)
+    (at-at/every
+      10000
+      #(evidence-log/log!
+         {:i "b0003"
+          :s "event-bus"
+          :c "heartbeat"
+          :f "tick"})
+      schedule-pool)
 
     (l/info "Start server on " port)
     (server/run-server @app {:port port})))
