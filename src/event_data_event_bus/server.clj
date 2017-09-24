@@ -186,8 +186,8 @@
          :s "event-bus"
          :c "event"
          :f "received"
-         :n (-> ctx ::payload :id)
-         :v (-> ctx ::payload :source_id)})
+         :n (-> ctx ::event :id)
+         :v (-> ctx ::event :source_id)})
 
         ; Send to all subscribers.
         (broadcast-live-async (::event ctx))
