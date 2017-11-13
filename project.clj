@@ -1,4 +1,4 @@
-(defproject event-data-event-bus "0.2.6"
+(defproject event-data-event-bus "0.2.7"
   :description "Event Bus for Event Data"
   :url "http://eventdata.crossref.org/"
   :license {:name "MIT License"
@@ -33,8 +33,8 @@
                  [org.slf4j/slf4j-simple "1.7.21"]
                  [clojurewerkz/quartzite "2.0.0"]
                  [org.clojure/math.combinatorics "0.1.4"]
-
                  [org.apache.kafka/kafka-clients "0.10.2.0"]]
+  :jvm-opts ["-Duser.timezone=UTC" "-Xmx3G"]
   :main ^:skip-aot event-data-event-bus.core
   :target-path "target/%s"
   :test-selectors {:default (constantly true)
