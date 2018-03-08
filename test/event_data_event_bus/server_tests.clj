@@ -315,7 +315,12 @@
       (clj-time/do-at monday
         (let [retrieved-archive-response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-26/aa"))
                                                  (mock/header "authorization" (str "Bearer " @matching-token))))
-              {retrieved-events "events" archive-date "archive-generated"} (json/read-str (:body retrieved-archive-response))]
+              {retrieved-events "events" archive-date "archive-generated"} (json/read-str (:body retrieved-archive-response))
+
+              ; The 'event IDs' endpoint should also return the same selection of IDs.
+              retrieved-ids-response (@server/app (-> (mock/request :get (str "/events/archive/2016-11-26/aa/ids"))
+                                                 (mock/header "authorization" (str "Bearer " @matching-token))))
+              {retrieved-ids "event-ids"} (json/read-str (:body retrieved-ids-response))]
 
           (is (.startsWith archive-date "2016-11-28") "Archive date should show the time the archive was created.")
 
@@ -329,14 +334,23 @@
           (is (every? #(get % "timestamp") retrieved-events) "All events should have been given IDs.")
 
           (is (= (set (map #(get %"id") saturday-events))
-                 (set (map #(get %"id") retrieved-events))) "All event IDs sent on Saturday should be returned."))))
+                 (set (map #(get %"id") retrieved-events))) "Archive should contain all events' IDs sent on Saturday.")
+
+          (is (= (set (map #(get %"id") saturday-events))
+                 (set retrieved-ids)) "IDs should contain IDs sent on Saturday."))))
 
     (testing "Empty archive returned when no data."
       (clj-time/do-at monday
         (let [retrieved-archive (@server/app (-> (mock/request :get (str "/events/archive/1901-01-10/aa"))
                                                  (mock/header "authorization" (str "Bearer " @matching-token))))
-              {retrieved-events "events"} (json/read-str (:body retrieved-archive))]
-          (is (empty? retrieved-events) "On a day when nothing happened the archive should be empty.")))))))
+              {retrieved-events "events"} (json/read-str (:body retrieved-archive))
+
+              retrieved-ids-response (@server/app (-> (mock/request :get (str "/events/archive/1901-01-10/aa/ids"))
+                                                 (mock/header "authorization" (str "Bearer " @matching-token))))
+              {retrieved-ids "event-ids"} (json/read-str (:body retrieved-ids-response))]
+
+          (is (empty? retrieved-events) "On a day when nothing happened the archive should be empty.")
+          (is (empty? retrieved-ids) "On a day when nothing happened the Event id archive should be empty.")))))))
 
 (deftest ^:component archive-should-return-events
   (testing "Archive should contain archived events."

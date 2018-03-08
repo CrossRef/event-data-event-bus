@@ -280,9 +280,39 @@
   :handle-ok (fn [ctx]
                 (archive/get-or-generate-archive @storage date-str prefix)))
 
+(defresource events-ids
+  [date-str prefix]
+  :available-media-types ["application/json"]
+
+  :authorized? (fn [ctx]
+                ; Authorized if the JWT claims are correctly signed.
+                (-> ctx :request :jwt-claims))
+
+  :malformed? (fn [ctx]
+    (let [date (try (clj-time-format/parse date/yyyy-mm-dd-format date-str) (catch IllegalArgumentException _ nil))]
+      [(nil? date) {::date date}]))
+  :allowed? (fn [ctx]
+              ; The date argument specifies the start of the day for which we want events.
+              ; Only allowed if the requested date range is yesterday or before.
+              (let [; Find the end of the day queried.
+                    end-date (clj-time/plus (::date ctx) (clj-time/days 1))
+
+                    ; The latest it can be is midnight at the start of today (i.e. end of yesterday).
+                    ; Add an extra hour to allow storage to propagate.
+                    latest (clj-time/minus (clj-time/now) (clj-time/hours 1))
+
+                    allowed (clj-time/before? end-date latest)]
+                allowed))
+  :handle-ok (fn [ctx]
+                {"archive-generated" (clj-time-format/unparse date-format (clj-time/now))
+                 "date" date-str
+                 "prefix" prefix
+                 "event-ids" (archive/event-ids-for @storage date-str prefix)}))
+
 (defroutes app-routes
   (GET "/" [] (home))
   (POST "/events" [] (events))
+  (GET "/events/archive/:date/:prefix/ids" [date prefix] (events-ids date prefix))
   (GET "/events/archive/:date/:prefix" [date prefix] (events-archive date prefix))
   (GET "/events/:id" [id] (event id))
   (PUT "/events/:id" [id] (update-event id))

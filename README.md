@@ -181,12 +181,9 @@ All Events are subject to the Event schema. If an Event is sent that does not co
 ## API Endpoints
 
  - `GET` `/subscriptions` - list subscriptions owned by user
- - `POST` `/subscriptions` - create new subscription
- - `DELETE` `/subscriptions/«subscription-id»` - unsubscribe
- - `PUT` `/subscriptions/«subscription-id»` - alter subscription
- - `GET` `/archive/«YYYY-MM-DD».json` - retrieve archive of Events for given day
+ - `GET` `/events/archive/«YYYY-MM-DD»/«prefix»` - retrieve archive of Events for given day
+ - `GET` `/events/archive/«YYYY-MM-DD»/«prefix»/ids` - retrieve archive of Event IDs for given day
  - `POST` `/events/` - send a new Event
- - `DELETE` `/events/«event-id»` - update an Event to mark as deleted
 
 ## Running the service
 

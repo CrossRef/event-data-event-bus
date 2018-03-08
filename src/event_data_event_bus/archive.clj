@@ -42,8 +42,8 @@
   [length]
   (map #(apply str %) (combinatorics/selections hexadecimal length)))
 
-(defn archive-for
-  "Generate archive for given YYYY-MM-DD date string prefix plus the event ID prefix."
+(defn event-ids-for
+  "Get a sequence of Event IDs for the given date and prefix."
   [storage date-str event-id-prefix]
   (let [; We are filtering the day index by the prefix which includes part of the event ID.
         ; We will then remove the date part of the prefix to find the event IDs.
@@ -55,8 +55,15 @@
         ; We get back a key with the day-prefix. The actual data is stored in the event-prefix.
         ; i.e. "d/YYYY-MM-DD/1234" -> "e/1234"
         prefix-length (+ (.length day-prefix) (.length "YYYY-MM-DD/"))
-        event-keys (doall (map #(str event-prefix (.substring ^String % prefix-length)) date-keys))
-        num-keys (count event-keys)
+        event-ids (map #(.substring ^String % prefix-length) date-keys)]
+    
+    event-ids))
+
+(defn archive-for
+  "Generate archive for given YYYY-MM-DD date string prefix plus the event ID prefix."
+  [storage date-str event-id-prefix]
+  (let [event-ids (event-ids-for storage date-str event-id-prefix)
+        num-keys (count event-ids)
 
         ; Retrieve every event for every key.
         ; S3 performs well in parallel, so fetch items in parallel.
@@ -65,7 +72,7 @@
                                    (swap! counter inc)
                                    (when (zero? (mod @counter 1000))
                                      (log/info "Building archive for" date-str "retrieved" @counter "/" num-keys " = " (int (* 100 (/ @counter num-keys))) "%"))
-                                   (store/get-string storage %)) event-keys)
+                                   (store/get-string storage (str event-prefix %))) event-ids)
         event-blobs (map deref future-event-blobs)
         all-events (map json/read-str event-blobs)
 
