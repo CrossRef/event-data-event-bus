@@ -1,13 +1,13 @@
-(defproject event-data-event-bus "0.2.9"
+(defproject event-data-event-bus "0.2.10"
   :description "Event Bus for Event Data"
   :url "http://eventdata.crossref.org/"
   :license {:name "MIT License"
             :url "https://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [event-data-common "0.1.41"]
+                 [event-data-common "0.1.43"]
                  [org.clojure/data.json "0.2.6"]
-                 [crossref-util "0.1.10"]
-                 [http-kit "2.1.18"]
+                 [crossref-util "0.1.14"]
+                 [http-kit "2.3.0-alpha5"]
                  [http-kit.fake "0.2.1"]
                  [liberator "0.14.1"]
                  [ring "1.5.0"]

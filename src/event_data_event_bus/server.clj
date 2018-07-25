@@ -19,7 +19,6 @@
             [event-data-common.storage.memory :as memory]
             [event-data-common.storage.store :as store]
             [event-data-common.date :as date]
-            [event-data-common.evidence-log :as evidence-log]
             [event-data-event-bus.schema :as schema]
             [event-data-event-bus.archive :as archive]
             [event-data-event-bus.downstream :as downstream]
@@ -181,13 +180,6 @@
     ; because the Event Bus API doesn't guarantee read-after-write.
     ; We still check the `event/«id»` endpoint for component testing though.
     (let [json (json/write-str (::event ctx))]
-      (evidence-log/log!
-        {:i "b0001"
-         :s "event-bus"
-         :c "event"
-         :f "received"
-         :n (-> ctx ::event :id)
-         :v (-> ctx ::event :source_id)})
 
         ; Send to all subscribers.
         (broadcast-live-async (::event ctx))
@@ -222,15 +214,6 @@
                   (let [new-event (::new-event ctx)
                         json (json/write-str new-event)
                         date-str (.substring (:timestamp new-event) 0 10)]
-                    
-                    (evidence-log/log!
-                      {:i "b0002"
-                       :s "event-bus"
-                       :c "event"
-                       :f "updated"
-                       :n (-> new-event :id)
-                       :v (-> new-event :source_id)})
-
 
                     ; Send to all subscribers.
                     (broadcast-live-async new-event)
@@ -340,15 +323,5 @@
 
 (defn run-server []
   (let [port (Integer/parseInt (:bus-port env))]
-    (l/info "Start heartbeat")
-    (at-at/every
-      10000
-      #(evidence-log/log!
-         {:i "b0003"
-          :s "event-bus"
-          :c "heartbeat"
-          :f "tick"})
-      schedule-pool)
-
     (l/info "Start server on " port)
     (server/run-server @app {:port port})))
